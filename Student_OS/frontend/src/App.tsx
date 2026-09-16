@@ -218,7 +218,7 @@ function renderFormattedMarkdown(content: string) {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'labs' | 'resources' | 'career' | 'desktop' | 'todos' | 'logs'>('copilot');
+  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'labs' | 'resources' | 'career'>('copilot');
   const [wsConnected, setWsConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
@@ -292,7 +292,7 @@ export default function App() {
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
 
   // Assignment Manager states
-  const [assignmentFilter, setAssignmentFilter] = useState<'pending' | 'all' | 'completed'>('pending');
+  const [assignmentFilter, setAssignmentFilter] = useState<'ongoing' | 'all' | 'submitted' | 'closed'>('ongoing');
   const [assignmentSearch, setAssignmentSearch] = useState('');
   const [showAddAssignmentModal, setShowAddAssignmentModal] = useState(false);
   const [newAssignmentTitle, setNewAssignmentTitle] = useState('');
@@ -302,18 +302,27 @@ export default function App() {
   const [submittingAssignment, setSubmittingAssignment] = useState(false);
 
   // Dynamic Assignment Metrics & Filter
-  const pendingAssignments = assignments.filter((a) => (a.status || '').toLowerCase() === 'pending');
-  const completedAssignments = assignments.filter((a) => (a.status || '').toLowerCase() !== 'pending');
+  const ongoingAssignments = assignments.filter((a) => ['pending', 'open'].includes((a.status || '').toLowerCase()));
+  const submittedAssignments = assignments.filter((a) => ['submitted', 'completed'].includes((a.status || '').toLowerCase()));
+  const closedAssignments = assignments.filter((a) => ['closed', 'not submitted'].includes((a.status || '').toLowerCase()));
+
   const filteredAssignments = assignments.filter((a) => {
-    const isPending = (a.status || '').toLowerCase() === 'pending';
-    if (assignmentFilter === 'pending' && !isPending) return false;
-    if (assignmentFilter === 'completed' && isPending) return false;
+    const st = (a.status || '').toLowerCase();
+    const isOngoing = ['pending', 'open'].includes(st);
+    const isSubmitted = ['submitted', 'completed'].includes(st);
+    const isClosed = ['closed', 'not submitted'].includes(st);
+
+    if (assignmentFilter === 'ongoing' && !isOngoing) return false;
+    if (assignmentFilter === 'submitted' && !isSubmitted) return false;
+    if (assignmentFilter === 'closed' && !isClosed) return false;
+
     if (assignmentSearch.trim()) {
       const q = assignmentSearch.toLowerCase();
       return (
         (a.title || '').toLowerCase().includes(q) ||
         (a.subject_name || '').toLowerCase().includes(q) ||
-        (a.deadline || '').toLowerCase().includes(q)
+        (a.deadline || '').toLowerCase().includes(q) ||
+        (a.status || '').toLowerCase().includes(q)
       );
     }
     return true;
@@ -829,9 +838,6 @@ export default function App() {
             { id: 'labs', label: 'Labworks & Code Practice', icon: FlaskConical, badge: labworks.length },
             { id: 'resources', label: 'Course Materials & Files', icon: FolderCheck },
             { id: 'career', label: 'Career & Opportunities', icon: Briefcase },
-            { id: 'desktop', label: 'Desktop Terminal', icon: Terminal },
-            { id: 'todos', label: 'Action Items', icon: CheckSquare },
-            { id: 'logs', label: 'System Audit Logs', icon: Activity },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1168,20 +1174,20 @@ export default function App() {
 
               <div className="p-4 rounded-lg bg-zinc-900/70 border border-zinc-800">
                 <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
-                  <span>PENDING ASSIGNMENTS</span>
-                  {pendingAssignments.length > 0 ? (
+                  <span>ONGOING ASSIGNMENTS</span>
+                  {ongoingAssignments.length > 0 ? (
                     <Clock className="h-4 w-4 text-amber-400" />
                   ) : (
                     <ShieldCheck className="h-4 w-4 text-emerald-400" />
                   )}
                 </div>
-                <div className={`text-2xl font-bold ${pendingAssignments.length > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                  {pendingAssignments.length} Pending
+                <div className={`text-2xl font-bold ${ongoingAssignments.length > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {ongoingAssignments.length} Ongoing
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">
-                  {pendingAssignments.length > 0
-                    ? `${pendingAssignments.length} active assignment(s) require submission`
-                    : 'All classroom assignments caught up'}
+                  {ongoingAssignments.length > 0
+                    ? `${ongoingAssignments.length} active assignment(s) require submission`
+                    : `All active caught up • ${submittedAssignments.length} submitted • ${closedAssignments.length} closed`}
                 </p>
               </div>
 
@@ -1209,7 +1215,7 @@ export default function App() {
                   <button
                     onClick={triggerSync}
                     disabled={syncing}
-                    className="px-2.5 py-1 rounded text-[11px] font-medium text-zinc-300 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 flex items-center space-x-1 transition disabled:opacity-50"
+                    className="px-2.5 py-1 rounded text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition flex items-center space-x-1.5 border border-zinc-700 disabled:opacity-50"
                   >
                     <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
                     <span>Rerun Update</span>
@@ -1286,10 +1292,10 @@ export default function App() {
                     <span>Classroom Submissions & Assignment Manager</span>
                   </h3>
                   <div className="flex items-center space-x-2">
-                    {pendingAssignments.length > 0 ? (
+                    {ongoingAssignments.length > 0 ? (
                       <span className="text-[11px] font-mono text-amber-400 px-2.5 py-1 rounded bg-amber-950/60 border border-amber-800/80 flex items-center space-x-1 font-semibold">
                         <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
-                        <span>{pendingAssignments.length} PENDING SUBMISSION</span>
+                        <span>{ongoingAssignments.length} ONGOING SUBMISSION</span>
                       </span>
                     ) : (
                       <span className="text-[11px] font-mono text-emerald-400 px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-800/60 flex items-center space-x-1 font-semibold">
@@ -1307,12 +1313,12 @@ export default function App() {
                   </div>
                 </div>
 
-                {pendingAssignments.length > 0 ? (
+                {ongoingAssignments.length > 0 ? (
                   <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-800/60 flex items-start space-x-3 mb-3">
                     <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="font-semibold text-xs text-amber-200">
-                        {pendingAssignments.length} Active Assignment(s) Pending Submission
+                        {ongoingAssignments.length} Active Assignment(s) Pending Submission
                       </div>
                       <p className="text-[11px] text-zinc-400 mt-0.5">
                         Track deadlines below. Click the checkmark to mark an assignment complete, or click trash to remove.
@@ -1324,10 +1330,10 @@ export default function App() {
                     <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="font-semibold text-xs text-emerald-300">
-                        Zero Pending Assignments
+                        Zero Ongoing Submissions Required
                       </div>
                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                        All coursework and classroom lab tasks across enrolled subjects are complete.
+                        All active coursework submissions are caught up. Java Lab is submitted, and past closed assignments are archived.
                       </p>
                     </div>
                   </div>
@@ -1336,32 +1342,42 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center space-x-1 bg-zinc-950 p-0.5 rounded border border-zinc-800 text-[11px]">
                     <button
-                      onClick={() => setAssignmentFilter('pending')}
+                      onClick={() => setAssignmentFilter('ongoing')}
                       className={`px-2.5 py-1 rounded font-medium transition ${
-                        assignmentFilter === 'pending'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        assignmentFilter === 'ongoing'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
                           : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      Pending ({pendingAssignments.length})
+                      Ongoing ({ongoingAssignments.length})
+                    </button>
+                    <button
+                      onClick={() => setAssignmentFilter('submitted')}
+                      className={`px-2.5 py-1 rounded font-medium transition ${
+                        assignmentFilter === 'submitted'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Submitted ({submittedAssignments.length})
+                    </button>
+                    <button
+                      onClick={() => setAssignmentFilter('closed')}
+                      className={`px-2.5 py-1 rounded font-medium transition ${
+                        assignmentFilter === 'closed'
+                          ? 'bg-zinc-800 text-zinc-200 border border-zinc-700 font-semibold'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Closed ({closedAssignments.length})
                     </button>
                     <button
                       onClick={() => setAssignmentFilter('all')}
                       className={`px-2.5 py-1 rounded font-medium transition ${
-                        assignmentFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                        assignmentFilter === 'all' ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
                       All ({assignments.length})
-                    </button>
-                    <button
-                      onClick={() => setAssignmentFilter('completed')}
-                      className={`px-2.5 py-1 rounded font-medium transition ${
-                        assignmentFilter === 'completed'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Completed ({completedAssignments.length})
                     </button>
                   </div>
 
@@ -1371,7 +1387,7 @@ export default function App() {
                       type="text"
                       value={assignmentSearch}
                       onChange={(e) => setAssignmentSearch(e.target.value)}
-                      placeholder="Search title, subject, or date..."
+                      placeholder="Search title, subject, status..."
                       className="w-full pl-8 pr-3 py-1 bg-zinc-950 border border-zinc-800 rounded text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
                     />
                   </div>
@@ -1379,31 +1395,39 @@ export default function App() {
 
                 <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
                   {filteredAssignments.map((asg) => {
-                    const isPending = (asg.status || '').toLowerCase() === 'pending';
+                    const st = (asg.status || '').toLowerCase();
+                    const isOngoing = ['pending', 'open'].includes(st);
+                    const isSubmitted = ['submitted', 'completed'].includes(st);
+                    const isClosed = ['closed', 'not submitted'].includes(st);
+
                     return (
                       <div
                         key={asg.id}
                         className={`p-3 rounded-lg border transition flex items-start justify-between gap-3 text-xs ${
-                          isPending
+                          isOngoing
                             ? 'bg-zinc-950/70 border-zinc-800/90 hover:border-zinc-700'
+                            : isSubmitted
+                            ? 'bg-emerald-950/10 border-emerald-950/40'
                             : 'bg-zinc-950/30 border-zinc-900 opacity-60'
                         }`}
                       >
                         <div className="flex items-start space-x-3 flex-1 min-w-0">
                           <button
                             onClick={() => toggleAssignmentStatus(asg.id)}
-                            title={isPending ? 'Mark as completed' : 'Mark as pending'}
+                            title={isOngoing ? 'Mark as completed' : 'Toggle status'}
                             className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition ${
-                              isPending
+                              isOngoing
                                 ? 'border-zinc-600 hover:border-emerald-400 hover:text-emerald-400 text-transparent'
-                                : 'bg-emerald-500 border-emerald-500 text-zinc-950'
+                                : isSubmitted
+                                ? 'bg-emerald-500 border-emerald-500 text-zinc-950'
+                                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
                             }`}
                           >
                             <Check className="h-3 w-3 stroke-[3]" />
                           </button>
 
                           <div className="min-w-0 flex-1">
-                            <div className={`font-medium truncate ${isPending ? 'text-zinc-200' : 'line-through text-zinc-500'}`}>
+                            <div className={`font-medium truncate ${isOngoing ? 'text-zinc-200' : isSubmitted ? 'text-zinc-300' : 'text-zinc-500'}`}>
                               {asg.title}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500 mt-1">
@@ -1411,7 +1435,7 @@ export default function App() {
                               <span>•</span>
                               <span className="flex items-center space-x-1 text-zinc-400 font-mono">
                                 <Clock className="h-3 w-3 text-zinc-500" />
-                                <span>Due: {asg.deadline || 'No deadline'}</span>
+                                <span>{isClosed ? `Deadline: ${asg.deadline || 'Past Due'}` : `Due: ${asg.deadline || 'No deadline'}`}</span>
                               </span>
                               {asg.is_lab === 1 && (
                                 <span className="px-1.5 py-0.2 rounded bg-blue-950/60 text-blue-400 border border-blue-900/60 text-[10px] font-mono">
@@ -1425,9 +1449,11 @@ export default function App() {
                         <div className="flex items-center space-x-2 flex-shrink-0">
                           <span
                             className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
-                              isPending
+                              isOngoing
                                 ? 'bg-amber-950/50 text-amber-300 border-amber-800/60'
-                                : 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50'
+                                : isSubmitted
+                                ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-800'
                             }`}
                           >
                             {asg.status}
@@ -1446,7 +1472,9 @@ export default function App() {
 
                   {filteredAssignments.length === 0 && (
                     <div className="p-8 text-center text-xs text-zinc-500 bg-zinc-950/40 rounded-lg border border-dashed border-zinc-800">
-                      No assignments match the selected filter.
+                      {assignmentFilter === 'ongoing'
+                        ? 'No active ongoing assignments currently require submission.'
+                        : 'No assignments match the selected filter.'}
                     </div>
                   )}
                 </div>
@@ -2160,184 +2188,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: DESKTOP TERMINAL */}
-        {activeTab === 'desktop' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 flex items-center space-x-2">
-                <Terminal className="h-4 w-4 text-zinc-300" />
-                <span>Desktop Workspace & Tool Runner</span>
-              </h2>
-              <p className="text-xs text-zinc-400">
-                Execute approved local tooling, file operations, and project launchers.
-              </p>
-            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              {[
-                { name: 'VS Code', app: 'code', icon: Code2, desc: 'Open Workspace' },
-                { name: 'Terminal', app: 'terminal', icon: Terminal, desc: 'PowerShell Console' },
-                { name: 'Academic Dir', app: 'explorer', icon: Folder, desc: 'Desktop\\3rd Year' },
-                { name: 'Antigravity', app: 'antigravity', icon: Server, desc: 'IDE Environment' }
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.name}
-                    onClick={() => launchApp(item.app)}
-                    className="p-3.5 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80 transition text-left"
-                  >
-                    <Icon className="h-4 w-4 text-zinc-300 mb-2" />
-                    <span className="font-semibold text-zinc-200 block">{item.name}</span>
-                    <span className="text-[11px] text-zinc-500">{item.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 font-mono text-xs">
-              <div className="flex items-center space-x-2 mb-3">
-                <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-                <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-                <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-                <span className="text-zinc-500 text-[11px] ml-2">student-os@workstation:~$</span>
-              </div>
-
-              <div className="flex items-center space-x-2 mb-3">
-                <span className="text-zinc-400">$</span>
-                <input
-                  type="text"
-                  value={cmdInput}
-                  onChange={(e) => setCmdInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && runCommand()}
-                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-600"
-                  placeholder="e.g. python --version, git status, pytest"
-                />
-                <button
-                  onClick={runCommand}
-                  disabled={cmdRunning}
-                  className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 font-semibold text-white transition flex items-center space-x-1"
-                >
-                  <Play className="h-3 w-3" />
-                  <span>{cmdRunning ? 'Running...' : 'Execute'}</span>
-                </button>
-              </div>
-
-              {cmdOutput && (
-                <div className="bg-zinc-950 p-3 rounded border border-zinc-800/80 text-zinc-300 max-h-56 overflow-y-auto whitespace-pre-wrap">
-                  {cmdOutput}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 5: ACTION ITEMS */}
-        {activeTab === 'todos' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 flex items-center space-x-2">
-                <CheckSquare className="h-4 w-4 text-zinc-300" />
-                <span>Academic & Career Action Items</span>
-              </h2>
-              <p className="text-xs text-zinc-400">Prioritized checklist of tasks, submissions, and goals</p>
-            </div>
-
-            <form onSubmit={handleAddTodo} className="flex gap-2 text-xs">
-              <input
-                type="text"
-                value={newTodoTitle}
-                onChange={(e) => setNewTodoTitle(e.target.value)}
-                placeholder="Add new task or study objective..."
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 focus:outline-none focus:border-zinc-600"
-              />
-              <select
-                value={newTodoCategory}
-                onChange={(e) => setNewTodoCategory(e.target.value)}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 focus:outline-none focus:border-zinc-600"
-              >
-                <option value="Academic">Academic</option>
-                <option value="Career">Career</option>
-                <option value="Coding">Coding</option>
-              </select>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 font-semibold text-white transition flex items-center space-x-1"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add Item</span>
-              </button>
-            </form>
-
-            <div className="space-y-2 text-xs">
-              {todos.map((todo) => (
-                <div
-                  key={todo.id}
-                  onClick={() => toggleTodo(todo.id)}
-                  className={`p-3 rounded-lg border transition cursor-pointer flex items-center justify-between ${
-                    todo.completed
-                      ? 'bg-zinc-900/30 border-zinc-800/40 text-zinc-500 line-through'
-                      : 'bg-zinc-900/60 border-zinc-800 text-zinc-200 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2.5">
-                    {todo.completed ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-zinc-600 flex-shrink-0" />
-                    )}
-                    <span className="font-medium">{todo.title}</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                    {todo.category}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: SYSTEM AUDIT LOGS */}
-        {activeTab === 'logs' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 flex items-center space-x-2">
-                  <Activity className="h-4 w-4 text-zinc-300" />
-                  <span>System Audit & Execution Logs</span>
-                </h2>
-                <p className="text-xs text-zinc-400">Live operational log of background synchronization and tasks</p>
-              </div>
-              <button
-                onClick={fetchLogs}
-                className="px-2.5 py-1.5 rounded text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition flex items-center space-x-1 border border-zinc-700"
-              >
-                <RefreshCw className="h-3 w-3" />
-                <span>Refresh</span>
-              </button>
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 font-mono text-xs max-h-[550px] overflow-y-auto space-y-1.5">
-              {logs.map((log) => (
-                <div key={log.id} className="flex space-x-2.5 border-b border-zinc-800/50 pb-1.5">
-                  <span className="text-zinc-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                  <span
-                    className={`font-semibold uppercase text-[11px] ${
-                      log.level === 'ERROR'
-                        ? 'text-rose-400'
-                        : log.level === 'WARNING'
-                        ? 'text-amber-400'
-                        : 'text-zinc-300'
-                    }`}
-                  >
-                    [{log.level}]
-                  </span>
-                  <span className="text-zinc-300 flex-1">{log.message}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Footer */}
