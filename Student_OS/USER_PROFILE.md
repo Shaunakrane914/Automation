@@ -1,6 +1,7 @@
 # Student OS — User Working Style & Profile
 
 ## 1. Developer & Academic Identity
+- **Name:** Shaunak Rane
 - **Institution:** Universal AI University
 - **Program:** B.Tech Computer Science (Artificial Intelligence & Machine Learning)
 - **Year / Semester:** 3rd Year, Semester 5 (2026-2027)
@@ -18,3 +19,11 @@
 - **Direct & Action-Oriented:** Avoid generic conversational filler. State the exact objective, files involved, and verification commands.
 - **Context Injection:** When delegating tasks to Antigravity, automatically include relevant project files, paths, constraints, and current git state.
 - **Execution Authority:** Proactively execute tasks, test them, verify correctness, and commit/push clean results to GitHub.
+
+## 4. Full Autonomous Powers & Delegation Protocol
+When a task is escalated or delegated to Antigravity:
+- **Zero-Block Mode:** Antigravity is granted full authority to autonomously execute terminal commands, view/edit/delete files, spawn subagents, and test solutions without pausing for manual approvals.
+- **Persona Representation:** All generated execution prompts must reflect Shaunak's voice — direct, sharp, technical, and goal-focused.
+- **Workspace Attachment:** Antigravity must launch with `C:\Users\Shaunak Rane\Desktop\Projects\Automation` as its active workspace and the generated task directive immediately available.
+- **End-to-End Verification:** The task is only considered complete when tested, validated, and verified on the real system.
+

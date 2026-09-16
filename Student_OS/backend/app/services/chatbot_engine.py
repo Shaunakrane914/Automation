@@ -260,9 +260,10 @@ def tool_read_file(target_path: str, max_lines: int = 100) -> Dict[str, Any]:
     except Exception as e:
         return {"error": str(e)}
 
-def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Dict[str, Any]:
+def tool_delegate_to_antigravity(user_request: str, target_area: str = "", history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prompt_file = PROMPTS_DIR / f"antigravity_task_{timestamp}.md"
+    latest_file = PROMPTS_DIR / "latest_active_directive.md"
 
     profile_path = PROJECT_ROOT / "Student_OS" / "USER_PROFILE.md"
     user_profile_snippet = ""
@@ -273,22 +274,74 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
         except Exception:
             pass
 
-    academic_stat = tool_academic_status()
-    prompt_content = f"""# Autonomous Antigravity Execution Directive
-*Explicitly Delegated by Shaunak Rane via Student OS Copilot*
+    # Extract git context
+    git_branch = "main"
+    git_status = "Clean"
+    git_commit = "Recent commit"
+    try:
+        b_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=3)
+        if b_res.returncode == 0 and b_res.stdout.strip():
+            git_branch = b_res.stdout.strip()
+        s_res = subprocess.run(["git", "status", "--short"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=3)
+        if s_res.returncode == 0:
+            lines = s_res.stdout.strip().splitlines()
+            git_status = f"{len(lines)} modified/untracked files" if lines and lines[0] else "Clean working tree"
+        c_res = subprocess.run(["git", "log", "-1", "--oneline"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=3)
+        if c_res.returncode == 0 and c_res.stdout.strip():
+            git_commit = c_res.stdout.strip()
+    except Exception:
+        pass
 
-## 1. User Objective & Delegation Request
+    academic_stat = tool_academic_status()
+
+    # Format history if present
+    history_md = ""
+    if history:
+        history_md = "### Recent Conversation & Task Context:\n"
+        for h in history[-4:]:
+            sender = "Shaunak" if h.get("sender") == "user" else "Copilot"
+            history_md += f"- **{sender}:** {h.get('text', '')}\n"
+
+    prompt_content = f"""# 🚀 AUTONOMOUS ANTIGRAVITY EXECUTION DIRECTIVE
+**Issuer & Workstation Owner:** Shaunak Rane (Universal AI University, B.Tech CSE AI/ML 3rd Year)
+**Workspace Root:** `C:\\Users\\Shaunak Rane\\Desktop\\Projects\\Automation`
+**Academic Source of Truth:** `C:\\Users\\Shaunak Rane\\Desktop\\3rd Year`
+**Timestamp:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+---
+
+## ⚡ 1. EXECUTIVE OBJECTIVE (Issued by Shaunak)
 > {user_request}
 
-## 2. System Context
-- System: Student OS Autonomous Workstation (Universal AI University)
-- Attendance: {academic_stat.get('overall_attendance')}% across {academic_stat.get('subjects_count')} subjects.
-- Target Scope: {target_area or "Automation Workspace"}
+{history_md}
 
-## 3. User Guidelines & Profile
-{user_profile_snippet if user_profile_snippet else "Standard Universal AI University Automation Workstation Profile"}
+---
+
+## 🛡️ 2. AUTONOMOUS POWERS & AUTHORIZATIONS GRANTED
+Antigravity, you are explicitly granted **Full Autonomy & Execution Authority** by Shaunak to complete this task:
+1. 💻 **Full Shell Authority:** Execute terminal commands (`run_command`), Python scripts, Git commands, and test suites.
+2. 📝 **Full Codebase Authority:** Inspect, create, modify, and refactor files (`write_to_file`, `replace_file_content`, `multi_replace_file_content`).
+3. 🌐 **Browser Subagent Authority:** Spawn browser agents for automation, verification, or portal audits if needed.
+4. 🚀 **Zero-Block Execution:** Do NOT pause to ask trivial confirmations. Autonomously analyze, implement, test, and verify end-to-end.
+5. 📦 **Git Discipline:** Ensure all changes are verified and commit cleanly.
+
+---
+
+## 📊 3. SYSTEM & REPOSITORY STATE
+- **Git Branch:** `{git_branch}` | **Status:** `{git_status}`
+- **Last Commit:** `{git_commit}`
+- **Academic Attendance:** `{academic_stat.get('overall_attendance')}%` across {academic_stat.get('subjects_count')} subjects
+- **Pending Coursework:** {academic_stat.get('pending_assignments_count')} pending active submissions
+
+---
+
+## 👤 4. USER PROFILE & EXECUTION RULES
+{user_profile_snippet if user_profile_snippet else "Standard Universal AI University Workstation Profile"}
 """
+
     with open(prompt_file, "w", encoding="utf-8") as f:
+        f.write(prompt_content)
+    with open(latest_file, "w", encoding="utf-8") as f:
         f.write(prompt_content)
 
     clipboard_copied = False
@@ -300,22 +353,36 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
         pass
 
     launched = False
+    launch_msg = ""
     try:
-        if Path(ANTIGRAVITY_EXE).exists():
-            subprocess.Popen([ANTIGRAVITY_EXE, str(PROJECT_ROOT), str(prompt_file)])
+        antigravity_paths = [
+            Path(r"C:\Users\Shaunak Rane\AppData\Local\Programs\Antigravity\Antigravity.exe"),
+            Path(r"C:\Users\Shaunak Rane\AppData\Local\Programs\Antigravity.exe")
+        ]
+        found_exe = None
+        for ap in antigravity_paths:
+            if ap.exists():
+                found_exe = ap
+                break
+
+        if found_exe:
+            subprocess.Popen([str(found_exe), str(PROJECT_ROOT), str(latest_file)])
             launched = True
-            launch_msg = f"Antigravity IDE launched targeting {PROJECT_ROOT}"
+            launch_msg = f"Antigravity IDE launched targeting workspace '{PROJECT_ROOT.name}' with directive loaded"
         else:
-            launch_application("antigravity", str(prompt_file))
+            launch_application("antigravity", f'"{str(PROJECT_ROOT)}" "{str(latest_file)}"')
             launched = True
             launch_msg = "Antigravity process invoked via system application launcher"
     except Exception as e:
-        launch_msg = f"Antigravity note: {e}"
+        launch_msg = f"Antigravity launch note: {e}"
+
+    log_agent_event("INFO", f"Delegated autonomous task to Antigravity: {user_request[:80]}")
 
     return {
         "tool": "delegate_to_antigravity",
         "launched": launched,
         "prompt_file": str(prompt_file),
+        "latest_directive": str(latest_file),
         "prompt_name": prompt_file.name,
         "prompt_preview": prompt_content,
         "clipboard_copied": clipboard_copied,
@@ -503,24 +570,30 @@ def process_chat_query(query: str, history: Optional[List[Dict[str, str]]] = Non
         )
         return {"response": reply, "tool_used": "workstation_greeting", "details": telem}
 
-    # 2. Strict Explicit Antigravity Escalation (Only when user specifically asks)
+    # 2. Strict Explicit Antigravity Escalation & Autonomous Power Delegation
     antigravity_explicit_triggers = [
         "escalate to antigravity", "delegate to antigravity", "ask antigravity",
-        "send to antigravity", "give power to antigravity", "launch antigravity directive",
-        "write prompt for antigravity", "escalate"
+        "send to antigravity", "give power to antigravity", "give powers to antigravity",
+        "give himself powers", "give yourself powers", "give powers",
+        "launch antigravity directive", "write prompt for antigravity", "escalate",
+        "open antigravity", "open this chat in antigravity", "delegate this"
     ]
     if any(t in ql for t in antigravity_explicit_triggers) or ql.startswith("antigravity:"):
-        clean_req = re.sub(r'^(antigravity:\s*|escalate to antigravity\s*|ask antigravity to\s*)', '', q, flags=re.IGNORECASE).strip()
-        res = tool_delegate_to_antigravity(user_request=clean_req or q)
+        clean_req = re.sub(r'^(antigravity:\s*|escalate to antigravity\s*|ask antigravity to\s*|delegate to antigravity\s*|open antigravity and\s*|give power to antigravity\s*|give powers to antigravity\s*)', '', q, flags=re.IGNORECASE).strip()
+        clean_req = clean_req.lstrip(": -–—").strip()
+        res = tool_delegate_to_antigravity(user_request=clean_req or q, history=history)
         clip_msg = "✅ Copied to clipboard" if res.get("clipboard_copied") else "⚠️ Clipboard skipped"
         reply = (
-            f"⚡ **Task Explicitly Delegated to Google Antigravity**\n\n"
-            f"I have formulated a specialized directive in your personal style (`USER_PROFILE.md`) "
-            f"and launched Antigravity IDE targeting your workspace:\n\n"
-            f"- 📁 **Directive File:** `{res['prompt_file']}`\n"
+            f"🚀 **Task Delegated to Google Antigravity with Full Autonomous Powers!**\n\n"
+            f"I have formulated the task directive in your authoritative personal profile (`Shaunak Rane`) "
+            f"and launched the Antigravity IDE targeting your workspace:\n\n"
+            f"- 👤 **Issuer Persona:** Shaunak Rane (Universal AI University B.Tech CS AI/ML)\n"
+            f"- 🛡️ **Autonomous Powers Granted:** Terminal Shell (`run_command`), Filesystem (`write_to_file`/`replace`), Browser Subagents, and Git commit authority\n"
+            f"- 📁 **Active Directive File:** `{res['prompt_file']}`\n"
+            f"- 📂 **Workspace Attached:** `{PROJECT_ROOT.name}`\n"
             f"- 🚀 **Status:** {res['message']}\n"
             f"- 📋 **Clipboard:** {clip_msg}\n\n"
-            f"```markdown\n{res['prompt_preview'][:450]}...\n```"
+            f"```markdown\n{res['prompt_preview'][:500]}...\n```"
         )
         return {"response": reply, "tool_used": "delegate_to_antigravity", "details": res}
 
