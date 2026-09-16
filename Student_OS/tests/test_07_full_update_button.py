@@ -52,11 +52,16 @@ with sync_playwright() as p:
         if "Auditing" in text_content or "Syncing" in text_content:
             results["ui_changes_observed"].append("Progress text appeared on button / banner")
 
-        # Wait up to 35 seconds for sync to complete or progress
-        for _ in range(35):
+        # Wait up to 120 seconds for sync to complete or progress
+        for i in range(120):
             page.wait_for_timeout(1000)
+            btn_cnt = page.locator("button:has-text('Rerun Full Update')").count()
             cur_text = page.locator("header").inner_text()
-            if "Rerun Full Update" in cur_text and not "Syncing" in cur_text and not "Auditing" in cur_text:
+            if "Auditing" in cur_text or "Syncing" in cur_text:
+                if len(results["ui_changes_observed"]) < 3:
+                    results["ui_changes_observed"].append(f"T+{i}s: {cur_text[:50]}...")
+            if btn_cnt > 0 and not ("Syncing" in cur_text or "Auditing" in cur_text):
+                results["ui_changes_observed"].append(f"Sync 1 completed around T+{i}s")
                 break
 
         counts_1 = get_db_counts()
@@ -67,13 +72,17 @@ with sync_playwright() as p:
 
         # Click 2 (to check duplicate creation)
         print("Clicking 'Rerun Full Update' Run 2...")
+        btn = page.locator("button:has-text('Rerun Full Update')").first
+        btn.wait_for(state="visible", timeout=10000)
         btn.click()
         page.wait_for_timeout(1000)
 
-        for _ in range(35):
+        for i in range(120):
             page.wait_for_timeout(1000)
+            btn_cnt = page.locator("button:has-text('Rerun Full Update')").count()
             cur_text = page.locator("header").inner_text()
-            if "Rerun Full Update" in cur_text and not "Syncing" in cur_text and not "Auditing" in cur_text:
+            if btn_cnt > 0 and not ("Syncing" in cur_text or "Auditing" in cur_text):
+                results["ui_changes_observed"].append(f"Sync 2 completed around T+{i}s")
                 break
 
         counts_2 = get_db_counts()

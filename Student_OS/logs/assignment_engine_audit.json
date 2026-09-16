@@ -1,0 +1,62 @@
+{
+  "test_cases": {
+    "Test Assignment Today": {
+      "deadline": "2026-09-16",
+      "status": "Open",
+      "calculated_priority": "CRITICAL",
+      "expected_priority": "CRITICAL",
+      "match": true
+    },
+    "Test Assignment Tomorrow": {
+      "deadline": "2026-09-17",
+      "status": "Open",
+      "calculated_priority": "HIGH",
+      "expected_priority": "HIGH",
+      "match": true
+    },
+    "Test Assignment Next Week": {
+      "deadline": "2026-09-23",
+      "status": "Open",
+      "calculated_priority": "MEDIUM",
+      "expected_priority": "MEDIUM",
+      "match": true
+    },
+    "Test Assignment Overdue": {
+      "deadline": "2026-09-13",
+      "status": "Open",
+      "calculated_priority": "OVERDUE",
+      "expected_priority": "OVERDUE",
+      "match": true
+    },
+    "Test Assignment Completed": {
+      "deadline": "2026-09-13",
+      "status": "Completed",
+      "calculated_priority": "DONE",
+      "expected_priority": "DONE",
+      "match": true
+    },
+    "Test Assignment Submitted": {
+      "deadline": "2026-09-16",
+      "status": "Submitted",
+      "calculated_priority": "DONE",
+      "expected_priority": "DONE",
+      "match": true
+    },
+    "Test Assignment Closed": {
+      "deadline": "2026-09-13",
+      "status": "Closed",
+      "calculated_priority": "CLOSED",
+      "expected_priority": "CLOSED",
+      "match": true
+    }
+  },
+  "priority_calculation": {},
+  "todo_generation": {},
+  "duplicate_prevention": {
+    "count_before": 0,
+    "count_after_first_insert": 1,
+    "count_after_second_insert": 2,
+    "prevented_duplicate": false
+  },
+  "overall_status": "PARTIAL \u2014 Priority calculation passed, but DB lacks UNIQUE constraint on assignments(title, subject_id)"
+}
