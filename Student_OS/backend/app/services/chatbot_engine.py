@@ -1,3 +1,4 @@
+from app.services.lab_matching_service import analyze_and_match_labworks, format_lab_analysis_markdown
 import os
 import re
 import sys
@@ -652,8 +653,17 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         }
 
     # 9c. Labworks, Practicals & Code Practice To-Dos
-    lab_keywords = ["labwork", "labworks", "practical", "practicals", "lab todo", "practice todo", "lab work", "labs", "experiments", "experiment", "servlet", "lab ", "lab1", "lab2", "lab3", "lab4", "lab5"]
+    lab_keywords = ["labwork", "labworks", "practical", "practicals", "lab todo", "practice todo", "lab work", "labs", "experiments", "experiment", "servlet", "lab ", "lab1", "lab2", "lab3", "lab4", "lab5", "drive", "sir's", "sirs", "problem statement"]
     if any(k in ql for k in lab_keywords) and not any(k in ql for k in ["assignment", "assignments", "homework"]):
+        # Check if Advance Java deep matching is requested
+        if any(k in ql for k in ["advance java", "java", "ajp", "servlet", "jdbc", "swing", "mdi", "5 labwords", "5 labworks", "5 labs"]):
+            analysis_data = analyze_and_match_labworks("advance_java")
+            reply = format_lab_analysis_markdown(analysis_data)
+            return {
+                "response": reply,
+                "tool_used": "digicampus_labwork_deep_analyzer",
+                "details": {"subject": "Advance Java", "experiments_count": analysis_data["total_experiments"]}
+            }
         target_subj = None
         if any(k in ql for k in ["advance java", "java", "ajp", "servlet", "jdbc", "swing", "mdi"]):
             target_subj = "Advance Java"
