@@ -1,0 +1,20 @@
+[
+  {
+    "course_name": "Summer Internship-I",
+    "course_code": "SKD5.52002",
+    "course_id": "3552",
+    "classroom_url": "https://uai.digiicampus.com/V2/#/classroom/3552/courseWork?sessionId=46321",
+    "local_folder": "Summer Internship",
+    "resources": [],
+    "ongoing_assignments": [],
+    "closed_assignments": [
+      {
+        "title": "Summer Internship Offer Letter",
+        "status": "Submission Pending",
+        "due_date": "Jun 23, 2026"
+      }
+    ],
+    "ongoing_count": "0",
+    "local_files_found": []
+  }
+]

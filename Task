@@ -1,0 +1,2432 @@
+uai.digiicampus.com
+id = shaunak.rane@universalai.in
+pass = Sharan@2007
+
+# MASTER BUILD PROMPT
+
+## Project: Shaunak Command Center — Academic + Career + Opportunity OS
+
+You are the lead software architect, full-stack developer, automation engineer, AI engineer, and QA engineer for this project.
+
+Build a **local-first personal command center/dashboard for Shaunak**, a 3rd-year B.Tech AI student.
+
+The system has two major areas:
+
+1. **Academic Command Center**
+2. **Career / GSoC / Fellowship / Mentorship / Competition Command Center**
+
+It should not behave like a static dashboard.
+
+It should behave like a **personal operating system/assistant** that continuously checks relevant sources, understands pending work, maintains local files, creates actionable todos, tracks progress, and can execute tasks on the PC when explicitly instructed.
+
+The system must be modular, testable, secure, and extensible.
+
+---
+
+# 0. CORE PRINCIPLES
+
+Follow these principles throughout development.
+
+### 0.1 Local-first
+
+The user's existing local folder is the source of truth for academic files.
+
+There is already a folder:
+
+```text
+3year/
+```
+
+Inside it are folders for subjects.
+
+Do NOT reorganize or delete existing files without explicit permission.
+
+The system should inspect the existing structure first and adapt to it.
+
+Example:
+
+```text
+3year/
+├── Subject A/
+├── Subject B/
+├── Subject C/
+├── Special Lab 1/
+├── Special Lab 2/
+├── NLP/
+├── Deep Learning/
+├── Data Structures/
+└── ...
+```
+
+Do not assume these exact subjects exist.
+
+Discover them.
+
+---
+
+### 0.2 Never silently destroy user data
+
+The application must NEVER:
+
+* delete academic files automatically
+* overwrite existing files without confirmation
+* rename large numbers of files automatically
+* move files between subjects based purely on an AI guess
+* submit assignments automatically
+* send applications automatically
+* send messages/emails automatically
+* make external commitments without explicit user confirmation
+
+It may suggest actions and prepare everything, but consequential actions require confirmation.
+
+---
+
+### 0.3 No hallucinated academic information
+
+If DigiCampus contains something, use the actual source.
+
+If something cannot be accessed:
+
+```text
+ACCESS FAILED
+```
+
+rather than inventing data.
+
+Every academic item should have:
+
+* source
+* timestamp
+* subject
+* title
+* type
+* deadline if available
+* status
+* confidence
+
+---
+
+### 0.4 Freshness is critical
+
+This is NOT a system that should rely on information stored months ago.
+
+Whenever the system refreshes:
+
+* DigiCampus
+* competitions
+* GSoC information
+* fellowships
+* mentorship programs
+* internships
+* scholarships
+* free-credit opportunities
+* developer programs
+* hackathons
+
+it should check current sources.
+
+Maintain:
+
+```text
+last_checked
+last_changed
+source
+source_url
+```
+
+The AI should clearly distinguish:
+
+```text
+NEW
+UPDATED
+UNCHANGED
+EXPIRED
+UNVERIFIED
+```
+
+---
+
+### 0.5 AI should be an orchestrator, not the database
+
+Do not store everything inside an LLM conversation.
+
+Use a proper local database.
+
+The AI should query structured data and perform actions through tools.
+
+---
+
+# 1. OVERALL SYSTEM ARCHITECTURE
+
+Design the application approximately as:
+
+```text
+                    ┌───────────────────────┐
+                    │   WEB / DESKTOP UI    │
+                    │   Main Dashboard      │
+                    └───────────┬───────────┘
+                                │
+                       ┌────────▼────────┐
+                       │ AI Orchestrator │
+                       │   Chatbot       │
+                       └────────┬────────┘
+                                │
+       ┌────────────────────────┼────────────────────────┐
+       │                        │                        │
+┌──────▼──────┐        ┌────────▼────────┐       ┌───────▼────────┐
+│ Academic    │        │ Career Engine   │       │ PC Automation  │
+│ Engine      │        │                 │       │ Engine         │
+└──────┬──────┘        └────────┬────────┘       └───────┬────────┘
+       │                        │                        │
+       │                        │                        │
+┌──────▼──────┐        ┌────────▼────────┐       ┌───────▼────────┐
+│ DigiCampus  │        │ Web Research    │       │ Antigravity    │
+│ Connector   │        │ Gemini CLI/API   │       │ VS Code        │
+└──────┬──────┘        │ Opportunity     │       │ Terminal       │
+       │               │ Discovery       │       │ Files          │
+       │               └─────────────────┘       └────────────────┘
+       │
+┌──────▼───────────────────────────────────────┐
+│                Local Database                │
+│ Tasks | Classes | Assignments | Attendance  │
+│ Documents | Opportunities | Applications    │
+│ Projects | Activity | Notifications         │
+└──────────────────────────────────────────────┘
+```
+
+---
+
+# 2. PHASE 0 — DISCOVERY AND REQUIREMENTS
+
+Before writing significant code, inspect the environment.
+
+Determine:
+
+* operating system
+* available Python version
+* Node.js version
+* Git installation
+* Gemini CLI installation
+* Gemini API availability
+* browser availability
+* existing `3year` folder
+* current folder structure
+* available ports
+* whether a local database already exists
+* whether Antigravity is installed
+* whether VS Code is installed
+* whether the user already has authentication/session capability for DigiCampus
+
+Do NOT modify the environment during discovery.
+
+Create:
+
+```text
+PROJECT_STATUS.md
+ARCHITECTURE.md
+ENVIRONMENT.md
+```
+
+Document what was discovered.
+
+### Phase 0 Test
+
+Verify:
+
+* application environment identified
+* 3year folder detected
+* subject folders detected
+* required tools detected
+* missing dependencies listed
+* no user files modified
+
+Only proceed after passing these checks.
+
+---
+
+# 3. PHASE 1 — PROJECT FOUNDATION
+
+Create the base application.
+
+Recommended architecture:
+
+### Frontend
+
+Use a modern web application.
+
+Possible:
+
+```text
+React + TypeScript
+```
+
+with a clean dashboard UI.
+
+### Backend
+
+Prefer:
+
+```text
+Python + FastAPI
+```
+
+because the project will eventually integrate:
+
+* automation
+* scraping/browser automation
+* AI
+* filesystem
+* ML/code utilities
+
+### Database
+
+Use:
+
+```text
+SQLite
+```
+
+initially.
+
+Design it so PostgreSQL can be introduced later.
+
+### Core directories
+
+Create something similar to:
+
+```text
+shaunak-command-center/
+│
+├── frontend/
+├── backend/
+│
+├── database/
+├── config/
+├── connectors/
+│   ├── digicampus/
+│   ├── opportunities/
+│   └── notifications/
+│
+├── ai/
+│   ├── gemini/
+│   ├── prompts/
+│   └── agents/
+│
+├── automation/
+│   ├── filesystem/
+│   ├── browser/
+│   ├── antigravity/
+│   └── pc_control/
+│
+├── academic/
+├── career/
+├── notifications/
+├── tests/
+├── logs/
+└── docs/
+```
+
+Keep secrets out of Git.
+
+Use:
+
+```text
+.env
+.env.example
+```
+
+and appropriate `.gitignore`.
+
+### Phase 1 Tests
+
+Test:
+
+* backend starts
+* frontend starts
+* database initializes
+* API health endpoint works
+* frontend can communicate with backend
+* configuration loads
+* secrets are not committed
+* application logs work
+
+Create automated tests.
+
+---
+
+# 4. PHASE 2 — LOCAL ACADEMIC FILE MANAGER
+
+The system must understand the existing:
+
+```text
+3year/
+```
+
+folder.
+
+Implement a filesystem scanner.
+
+It should identify:
+
+* subjects
+* files
+* folders
+* file types
+* modification dates
+* possible assignment documents
+* PDFs
+* DOCX
+* PPTX
+* XLSX
+* images
+* source code
+* ZIP files
+* README files
+
+Do NOT assume filename conventions.
+
+Use a combination of:
+
+* folder location
+* filename
+* file metadata
+* document content where useful
+
+to classify files.
+
+Example:
+
+```text
+Subject
+ ├── Notes
+ ├── Assignments
+ ├── Labs
+ ├── Question Papers
+ ├── Reference
+ └── Unknown
+```
+
+Do not physically create this organization unless explicitly enabled.
+
+Instead, maintain a **virtual classification layer** first.
+
+---
+
+## File Matching
+
+When DigiCampus contains a document:
+
+```text
+Teacher uploaded:
+"Unit 3 NLP Notes.pdf"
+```
+
+check whether an equivalent local file exists.
+
+Use:
+
+* filename similarity
+* file hash
+* size
+* metadata
+* semantic similarity where appropriate
+
+Possible states:
+
+```text
+DOWNLOADED
+ALREADY_EXISTS
+UPDATED_VERSION
+MISSING_LOCALLY
+DUPLICATE
+UNKNOWN
+```
+
+Never overwrite an existing file automatically.
+
+If a newer version exists:
+
+```text
+New version detected.
+
+Local:
+Unit_3_NLP.pdf
+
+DigiCampus:
+Unit 3 NLP Notes.pdf
+
+[Download New Version]
+[Keep Local]
+[Compare]
+```
+
+---
+
+### Phase 2 Tests
+
+Create test cases for:
+
+* new file detection
+* duplicate detection
+* renamed files
+* identical hashes
+* changed documents
+* unknown files
+* unsupported file types
+* permission errors
+* inaccessible folders
+
+Run tests using temporary directories.
+
+Never test destructive operations against the real `3year` folder.
+
+---
+
+# 5. PHASE 3 — DIGICAMPUS CONNECTOR
+
+Build a DigiCampus connector.
+
+The exact implementation should be determined after inspecting the actual DigiCampus website/API.
+
+Do NOT invent endpoints.
+
+If no official API exists, use browser automation only where permitted.
+
+The connector should be able to:
+
+1. Login
+2. Navigate to assignments
+3. Discover subjects
+4. Discover teacher-uploaded documents
+5. Discover assignments
+6. Identify pending assignments
+7. Discover classes/materials
+8. Fetch attendance
+9. Record timestamps
+10. Detect changes
+
+Credentials must NOT be stored in plaintext.
+
+Prefer:
+
+* session cookies
+* OS credential store
+* encrypted local storage
+
+where appropriate.
+
+---
+
+# 6. DIGICAMPUS ACADEMIC DATA MODEL
+
+Create database entities such as:
+
+```text
+Subject
+Class
+Assignment
+Document
+Teacher
+AttendanceRecord
+AcademicEvent
+SyncHistory
+```
+
+Example Assignment fields:
+
+```text
+id
+subject_id
+title
+description
+teacher
+created_at
+deadline
+status
+source_url
+last_checked
+last_updated
+```
+
+Possible statuses:
+
+```text
+NEW
+PENDING
+IN_PROGRESS
+COMPLETED
+OVERDUE
+SUBMITTED
+UNKNOWN
+```
+
+---
+
+# 7. PHASE 4 — ACADEMIC SYNC ENGINE
+
+Create a synchronization engine.
+
+When the user presses:
+
+```text
+SYNC ACADEMICS
+```
+
+the system should:
+
+```text
+1. Login/check session
+2. Fetch subjects
+3. Fetch assignments
+4. Fetch uploaded documents
+5. Fetch classes
+6. Fetch attendance
+7. Compare with local database
+8. Identify changes
+9. Compare documents with 3year/
+10. Download missing documents
+11. Flag conflicts
+12. Update dashboard
+13. Generate tasks
+14. Generate notification events
+```
+
+Display:
+
+```text
+Last sync: 09:42 AM
+
+Subjects checked: 12
+New assignments: 2
+Pending assignments: 5
+New documents: 7
+Downloaded: 5
+Conflicts: 1
+Attendance updated: Yes
+```
+
+---
+
+# 8. PHASE 5 — ASSIGNMENT TODO ENGINE
+
+Create an automatic task engine.
+
+Every assignment should generate a task where appropriate.
+
+Example:
+
+```text
+NLP
+├── Assignment: POS Tagging
+│   ├── Read instructions
+│   ├── Complete implementation
+│   ├── Test
+│   └── Submit
+```
+
+Tasks should support:
+
+```text
+priority
+deadline
+estimated_time
+status
+subject
+assignment
+created_at
+```
+
+Priority can be determined from:
+
+* deadline
+* difficulty
+* estimated time
+* overdue status
+
+But explain why something was prioritized.
+
+---
+
+# 9. SPECIAL LAB 1 + SPECIAL LAB 2
+
+This is extremely important.
+
+For:
+
+```text
+Special Lab 1
+Special Lab 2
+```
+
+the system must behave differently.
+
+If an assignment/lab exercise is posted:
+
+```text
+DO NOT ONLY CREATE A SUBMISSION TODO.
+```
+
+Create a **practice workflow**.
+
+Example:
+
+```text
+Special Lab 1
+
+Lab Task:
+Implement CNN image classification.
+
+Tasks:
+
+[ ] Read problem
+[ ] Understand required algorithm
+[ ] Recreate implementation from scratch
+[ ] Run code
+[ ] Debug
+[ ] Modify parameters
+[ ] Write short explanation
+[ ] Save practice code
+[ ] Final submission
+```
+
+The goal is to ensure Shaunak actually practices the code.
+
+Do NOT generate this practice workflow for every subject.
+
+Only apply this enhanced practice mode to the specified lab subjects.
+
+---
+
+# 10. WHEN NO ASSIGNMENT IS POSTED
+
+If a subject has no explicit assignment:
+
+```text
+Do not invent an assignment.
+```
+
+Instead inspect recently created classes/materials.
+
+Example:
+
+```text
+Today's class:
+Convolutional Neural Networks
+
+No assignment detected.
+
+Create small learning task:
+
+[ ] Read CNN basics
+[ ] Review today's topic
+[ ] Create 1-page README
+[ ] Save README under subject learning folder
+```
+
+The README should be small.
+
+Possible structure:
+
+```markdown
+# Topic
+
+## What was taught?
+
+## Key concepts
+
+## Important formulas / syntax
+
+## Example
+
+## What I need to practice
+
+## Questions I still have
+```
+
+Do not generate fake lecture content.
+
+If the class content is unavailable, create only:
+
+```text
+Review today's topic: CNN
+```
+
+---
+
+# 11. PHASE 6 — ATTENDANCE DASHBOARD
+
+Fetch attendance from DigiCampus.
+
+Display:
+
+```text
+Overall Attendance: XX%
+
+Subject             Attendance
+--------------------------------
+Deep Learning        XX%
+NLP                  XX%
+AJP                  XX%
+BDA                  XX%
+Special Lab 1        XX%
+Special Lab 2        XX%
+```
+
+Also calculate:
+
+```text
+Current percentage
+Lectures attended
+Lectures conducted
+Lectures missed
+```
+
+Where mathematically valid, calculate:
+
+```text
+Lectures needed to reach 75%
+Lectures needed to reach 80%
+Maximum lectures that can be missed
+```
+
+Never assume the college's attendance policy.
+
+Make the target configurable.
+
+Example:
+
+```text
+Attendance target: 80%
+```
+
+Include warnings:
+
+```text
+SAFE
+WATCH
+RISK
+```
+
+These should be rule-based, not AI hallucinations.
+
+---
+
+# 12. PHASE 7 — MAIN ACADEMIC DASHBOARD
+
+Create an academic dashboard containing:
+
+## Today's priorities
+
+```text
+1. NLP assignment — due tomorrow
+2. Special Lab 1 practice
+3. BDA README
+```
+
+## Attendance
+
+Visual cards for each subject.
+
+## Assignments
+
+```text
+Pending
+Due today
+Due this week
+Overdue
+Completed
+```
+
+## New documents
+
+Show documents added since the previous sync.
+
+## Today's classes
+
+Display classes fetched from DigiCampus.
+
+## Local file health
+
+Example:
+
+```text
+Academic files: 428
+
+Matched: 391
+Missing: 23
+New: 9
+Needs review: 5
+```
+
+---
+
+# 13. PHASE 8 — CAREER COMMAND CENTER
+
+Build a completely separate section.
+
+This section manages:
+
+* GSoC
+* fellowships
+* mentorship programs
+* internships
+* open-source programs
+* competitions
+* hackathons
+* scholarships
+* developer programs
+* research opportunities
+* student programs
+* coding competitions
+* AI competitions
+
+The system must focus especially on opportunities that can realistically be pursued **solo**.
+
+---
+
+# 14. OPPORTUNITY DISCOVERY ENGINE
+
+Use current web research.
+
+Integrate:
+
+```text
+Gemini CLI
+Gemini API
+```
+
+where appropriate.
+
+Gemini should help discover and summarize current opportunities.
+
+However:
+
+### CRITICAL
+
+Gemini is not the source of truth.
+
+Every opportunity must have a source URL.
+
+Store:
+
+```text
+name
+organization
+type
+description
+eligibility
+deadline
+opening_date
+solo_possible
+team_required
+student_eligible
+country_requirements
+technology_requirements
+prize
+credits
+stipend
+certificate
+application_url
+source_url
+last_verified
+status
+```
+
+---
+
+# 15. FRESHNESS SYSTEM
+
+Every opportunity should have:
+
+```text
+last_verified
+```
+
+and:
+
+```text
+verification_status
+```
+
+Possible states:
+
+```text
+VERIFIED
+UPDATED
+EXPIRED
+NOT_FOUND
+NEEDS_REVIEW
+```
+
+When refreshing:
+
+```text
+Existing opportunity
+        ↓
+Search official source
+        ↓
+Compare information
+        ↓
+Detect changes
+        ↓
+Update database
+```
+
+If the deadline changes:
+
+```text
+DEADLINE CHANGED
+```
+
+If eligibility changes:
+
+```text
+ELIGIBILITY CHANGED
+```
+
+If registration opens:
+
+```text
+NOW OPEN
+```
+
+---
+
+# 16. OPPORTUNITY CATEGORIES
+
+Create filters for:
+
+```text
+GSoC
+Fellowship
+Mentorship
+Internship
+Hackathon
+Open Source
+Research
+AI/ML
+Web3
+Cloud
+Developer Program
+Scholarship
+Competition
+Certification
+```
+
+Also add:
+
+```text
+Solo
+Team
+Remote
+India
+Global
+Paid
+Unpaid
+Credits
+Certificate
+```
+
+---
+
+# 17. FREE CREDIT OPPORTUNITIES
+
+Create a dedicated category:
+
+```text
+FREE DEVELOPER CREDITS
+```
+
+Look for legitimate current programs that provide things such as:
+
+* cloud credits
+* AI API credits
+* developer credits
+* compute credits
+* student benefits
+* coding tool credits
+* IDE benefits
+* startup/student program credits
+
+Examples of the kinds of programs to investigate include opportunities associated with:
+
+* OpenAI/Codex
+* Anthropic/Claude
+* Google/Gemini
+* AWS
+* Azure
+* Google Cloud
+* GitHub
+* other legitimate developer platforms
+
+Do NOT assume a program currently exists.
+
+Verify it each time.
+
+Do not encourage bypassing eligibility requirements.
+
+---
+
+# 18. SOLO COMPETITION ENGINE
+
+One major filter should be:
+
+```text
+CAN I DO THIS ALONE?
+```
+
+Classify opportunities:
+
+```text
+SOLO
+TEAM REQUIRED
+TEAM OPTIONAL
+UNKNOWN
+```
+
+Prioritize discovery of:
+
+* solo hackathons
+* individual coding competitions
+* Kaggle-style competitions
+* open-source competitions
+* individual research competitions
+* AI challenges
+* developer challenges
+* build challenges
+* online competitions
+
+Never claim something is solo unless the official rules support it.
+
+---
+
+# 19. GSoC / OPEN SOURCE TRACKER
+
+Create a dedicated GSoC workflow.
+
+Track:
+
+```text
+Organizations
+Projects
+Tech stacks
+Ideas
+Contribution requirements
+Application windows
+Important dates
+Mentors
+Repositories
+Issues
+Previous participation
+```
+
+For each organization:
+
+```text
+Organization
+Repository
+Technology
+Project idea
+Difficulty
+Required skills
+Good first issue
+Contribution status
+Application status
+```
+
+The system should help turn:
+
+```text
+"I want to pursue GSoC"
+```
+
+into daily actionable work.
+
+---
+
+# 20. CAREER TODO ENGINE
+
+Create daily tasks.
+
+Example:
+
+```text
+TODAY
+
+GSoC
+[ ] Research 2 organizations
+[ ] Read one repository
+[ ] Find 2 beginner-friendly issues
+
+FELLOWSHIPS
+[ ] Check newly opened fellowship
+[ ] Verify eligibility
+
+OPEN SOURCE
+[ ] Make one contribution
+
+COMPETITIONS
+[ ] Check newly opened solo competitions
+
+APPLICATIONS
+[ ] Improve resume
+[ ] Apply to 2 opportunities
+```
+
+Do not blindly generate arbitrary tasks.
+
+Tasks should be based on actual current opportunities and Shaunak's tracked progress.
+
+---
+
+# 21. OPPORTUNITY PIPELINE
+
+Create a Kanban-style pipeline:
+
+```text
+DISCOVERED
+    ↓
+RESEARCHING
+    ↓
+ELIGIBILITY CHECK
+    ↓
+PREPARING
+    ↓
+READY TO APPLY
+    ↓
+APPLIED
+    ↓
+INTERVIEW / REVIEW
+    ↓
+ACCEPTED / REJECTED
+```
+
+Allow manual updates.
+
+---
+
+# 22. APPLICATION TRACKER
+
+For every application store:
+
+```text
+Opportunity
+Organization
+Date discovered
+Deadline
+Date applied
+Status
+Resume version
+Cover letter version
+GitHub repository
+Portfolio
+Notes
+Next action
+```
+
+Possible statuses:
+
+```text
+Not Started
+Preparing
+Applied
+Assessment
+Interview
+Accepted
+Rejected
+Withdrawn
+Expired
+```
+
+---
+
+# 23. PHASE 9 — GEMINI CLI + GEMINI API
+
+Integrate Gemini as the research and reasoning layer.
+
+Use Gemini CLI for tasks where local environment access is useful.
+
+Use Gemini API for application-level AI functionality.
+
+Create an abstraction:
+
+```text
+AIProvider
+```
+
+so Gemini is not hardcoded everywhere.
+
+Potential interface:
+
+```text
+generate()
+research()
+summarize()
+classify()
+extract()
+plan()
+review()
+```
+
+---
+
+# 24. MULTI-AI ARCHITECTURE
+
+Do not tightly couple the dashboard to one AI.
+
+Design:
+
+```text
+AI Provider
+├── Gemini
+├── OpenAI
+└── Future providers
+```
+
+The dashboard should know:
+
+```text
+which model performed an action
+```
+
+Store:
+
+```text
+provider
+model
+timestamp
+task
+result
+```
+
+---
+
+# 25. "STAY ALIVE" REFRESH SYSTEM
+
+The system should have a refresh mechanism.
+
+Example:
+
+```text
+Refresh Now
+```
+
+and optionally:
+
+```text
+Auto Refresh
+```
+
+The refresh process checks:
+
+### Academic
+
+* DigiCampus
+* assignments
+* documents
+* classes
+* attendance
+
+### Career
+
+* GSoC
+* fellowships
+* mentorship
+* competitions
+* hackathons
+* internships
+* developer programs
+* free credits
+
+Then produce:
+
+```text
+WHAT CHANGED?
+```
+
+Example:
+
+```text
+Since your last refresh:
+
++ 2 new assignments
++ 4 new documents
++ 1 new fellowship
++ 3 new competitions
++ 1 free cloud credit program
+
+Deadline changed:
+GSoC-related opportunity — deadline updated
+
+Expired:
+Competition X
+```
+
+---
+
+# 26. PHASE 10 — AI CHATBOT
+
+Build the dashboard chatbot.
+
+The chatbot should understand commands such as:
+
+```text
+What do I need to do today?
+```
+
+```text
+What assignments are pending?
+```
+
+```text
+What did I miss this week?
+```
+
+```text
+Check my attendance.
+```
+
+```text
+What new opportunities appeared today?
+```
+
+```text
+Find solo competitions.
+```
+
+```text
+What should I work on for GSoC today?
+```
+
+```text
+Open my Special Lab 1 code.
+```
+
+```text
+Create a README for today's NLP class.
+```
+
+```text
+Prepare me for this fellowship.
+```
+
+```text
+Research this opportunity.
+```
+
+---
+
+# 27. AI TOOL SYSTEM
+
+The chatbot should NOT directly receive unrestricted access to the entire PC.
+
+Create explicit tools.
+
+Example:
+
+```text
+list_files()
+read_file()
+create_file()
+edit_file()
+open_application()
+open_browser()
+open_url()
+run_command()
+search_web()
+query_database()
+sync_digicampus()
+sync_opportunities()
+create_task()
+complete_task()
+open_project()
+```
+
+Each tool should have permissions.
+
+---
+
+# 28. PC CONTROL
+
+The chatbot should eventually be able to control the PC.
+
+For example:
+
+User:
+
+```text
+Open Antigravity and ask it to create the README for today's NLP class.
+```
+
+The system should:
+
+1. Find Antigravity.
+2. Open it.
+3. Prepare the correct prompt.
+4. Include relevant information.
+5. Send the prompt if permitted.
+6. Monitor the result.
+7. Return the result to the dashboard.
+
+However, actions with external consequences require confirmation.
+
+---
+
+# 29. ANTIGRAVITY INTEGRATION
+
+Create an Antigravity automation adapter.
+
+The adapter should understand:
+
+```text
+open Antigravity
+```
+
+and:
+
+```text
+send prompt
+```
+
+where technically possible.
+
+Do NOT hardcode coordinates blindly.
+
+Prefer:
+
+* CLI/API
+* accessibility APIs
+* application automation APIs
+* window titles
+* keyboard shortcuts
+* robust selectors
+
+Use GUI automation only when necessary.
+
+---
+
+# 30. "SHAUNAK PROMPTING STYLE"
+
+Create a user preference/profile system.
+
+The system should learn the user's preferred working style from explicitly configured preferences and previous approved interactions.
+
+Create something like:
+
+```text
+USER_PROFILE.md
+```
+
+containing non-sensitive preferences such as:
+
+```text
+Preferred explanation style
+Preferred coding style
+Preferred project difficulty
+Preferred technologies
+Preferred response structure
+Preferred prompt style
+Preferred file organization
+Preferred GitHub conventions
+```
+
+Do not secretly profile the user.
+
+Allow the user to inspect/edit these preferences.
+
+---
+
+# 31. PROMPT GENERATOR
+
+When asking another AI to perform a task, the system should generate a high-quality prompt automatically.
+
+Example user request:
+
+```text
+Create a README for today's class.
+```
+
+The system gathers:
+
+```text
+Subject
+Class topic
+Existing notes
+Existing README
+User preferences
+Relevant assignment
+```
+
+Then generates the appropriate prompt.
+
+The user should be able to see:
+
+```text
+Generated prompt
+```
+
+before sending it for sensitive or consequential actions.
+
+---
+
+# 32. DOCUMENT CREATION
+
+The chatbot should be able to create documents.
+
+Example:
+
+```text
+Create a README for today's Deep Learning class.
+```
+
+It should:
+
+1. Identify class.
+2. Retrieve relevant information.
+3. Create prompt.
+4. Ask Antigravity/AI to generate document where appropriate.
+5. Save locally.
+6. Show preview.
+7. Track the file.
+
+Possible outputs:
+
+```text
+README.md
+notes.md
+assignment_plan.md
+practice.md
+research_notes.md
+```
+
+---
+
+# 33. MOBILE CONNECTION
+
+Create a mobile-friendly interface.
+
+The phone should be able to connect to the dashboard.
+
+Preferred architecture:
+
+```text
+Phone
+  ↓
+Secure HTTPS/WebSocket
+  ↓
+Local/Cloud Gateway
+  ↓
+Dashboard backend
+  ↓
+PC
+```
+
+Do not expose the raw PC backend directly to the public internet.
+
+Use authentication.
+
+---
+
+# 34. MOBILE NOTIFICATIONS
+
+Send notifications for important events.
+
+Examples:
+
+```text
+🔴 Assignment due tomorrow
+```
+
+```text
+🟠 Special Lab 1 practice pending
+```
+
+```text
+🟡 Attendance dropped below target
+```
+
+```text
+🟢 New solo competition found
+```
+
+```text
+🟢 New fellowship application opened
+```
+
+```text
+🔵 New free developer credits discovered
+```
+
+Allow notification settings:
+
+```text
+Assignments
+Attendance
+Labs
+GSoC
+Fellowships
+Competitions
+Applications
+Free credits
+```
+
+---
+
+# 35. NOTIFICATION PRIORITY
+
+Use:
+
+```text
+CRITICAL
+HIGH
+MEDIUM
+LOW
+INFO
+```
+
+Example:
+
+```text
+Assignment due in 2 hours
+→ CRITICAL
+
+Assignment due in 4 days
+→ MEDIUM
+
+New competition
+→ LOW
+```
+
+Avoid notification spam.
+
+Group related notifications.
+
+---
+
+# 36. PHASE 11 — DAILY BRIEFING
+
+Create a daily briefing.
+
+Example:
+
+```text
+GOOD MORNING SHAUNAK
+
+ACADEMICS
+────────────
+3 assignments pending
+1 due today
+2 documents downloaded
+
+ATTENDANCE
+────────────
+Overall: XX%
+2 subjects require attention
+
+TODAY'S CLASSES
+────────────
+09:00 — Deep Learning
+11:00 — NLP
+
+LAB PRACTICE
+────────────
+Special Lab 1 — 45 min practice pending
+
+CAREER
+────────────
+2 new solo competitions
+1 fellowship deadline approaching
+3 GSoC tasks pending
+
+TODAY'S TOP 5
+────────────
+1. Submit NLP assignment
+2. Practice Special Lab 1
+3. Research GSoC organization
+4. Apply to fellowship
+5. Complete class README
+```
+
+---
+
+# 37. PHASE 12 — WEEKLY REVIEW
+
+Generate a weekly review.
+
+Include:
+
+```text
+Assignments completed
+Assignments missed
+Classes attended
+Attendance change
+Lab practice hours
+GitHub activity
+Applications submitted
+Opportunities discovered
+Competitions entered
+GSoC progress
+Open-source contributions
+Upcoming deadlines
+```
+
+Also identify:
+
+```text
+What is falling behind?
+```
+
+based on objective data.
+
+---
+
+# 38. COMMAND CENTER UI
+
+Main navigation:
+
+```text
+┌────────────────────────────────────────────┐
+│ SHAUNAK COMMAND CENTER                     │
+├────────────────────────────────────────────┤
+│ Dashboard                                  │
+│                                            │
+│ ACADEMICS                                  │
+│ ├── Subjects                               │
+│ ├── Assignments                            │
+│ ├── Documents                              │
+│ ├── Labs                                   │
+│ ├── Attendance                             │
+│ └── Classes                                │
+│                                            │
+│ CAREER                                     │
+│ ├── GSoC                                   │
+│ ├── Fellowships                            │
+│ ├── Mentorship                             │
+│ ├── Internships                            │
+│ ├── Competitions                           │
+│ ├── Open Source                            │
+│ └── Free Credits                           │
+│                                            │
+│ TASKS                                      │
+│ ├── Today                                  │
+│ ├── This Week                              │
+│ └── All                                    │
+│                                            │
+│ AI ASSISTANT                               │
+│                                            │
+│ SYSTEM                                     │
+│ ├── Connections                             │
+│ ├── Sync                                    │
+│ ├── Logs                                    │
+│ └── Settings                                │
+└────────────────────────────────────────────┘
+```
+
+---
+
+# 39. GLOBAL SEARCH
+
+Implement search across:
+
+```text
+Assignments
+Documents
+Subjects
+Classes
+Tasks
+Opportunities
+Applications
+Projects
+Notes
+```
+
+Example:
+
+```text
+Search: CNN
+```
+
+should return:
+
+```text
+Deep Learning class
+CNN assignment
+CNN notes
+Special Lab code
+CNN README
+Related GSoC project
+```
+
+---
+
+# 40. ACTIVITY LOG
+
+Maintain a complete activity log.
+
+Example:
+
+```text
+09:30
+DigiCampus synced
+
+09:31
+2 new documents detected
+
+09:32
+Assignment detected:
+NLP POS Tagging
+
+09:33
+Document downloaded:
+Unit 3 NLP.pdf
+
+09:35
+Attendance updated
+
+09:40
+Opportunity engine refreshed
+
+09:42
+New solo AI competition detected
+```
+
+---
+
+# 41. ERROR HANDLING
+
+Every connector must gracefully handle:
+
+```text
+Login failure
+Session expiration
+Network failure
+Website changes
+Captcha
+Rate limiting
+Missing page
+Invalid credentials
+Permission errors
+File conflicts
+API failure
+AI provider failure
+```
+
+Never crash the entire dashboard because one connector fails.
+
+Example:
+
+```text
+Academic Sync
+✓ Local files
+✓ Database
+✓ Attendance
+✗ DigiCampus assignments
+
+Reason:
+DigiCampus session expired.
+
+[Login Again]
+```
+
+---
+
+# 42. SECURITY
+
+Implement:
+
+* authentication
+* secure session management
+* encrypted secrets where possible
+* role/permission system for tools
+* audit log
+* confirmation dialogs
+* command allowlist
+* path restrictions
+* localhost binding by default
+
+The AI must NOT be allowed to execute arbitrary destructive shell commands by default.
+
+Dangerous commands should require explicit confirmation.
+
+Examples:
+
+```text
+rm
+format
+del
+disk operations
+registry modifications
+credential extraction
+```
+
+must never be silently executed.
+
+---
+
+# 43. AI ACTION CONFIRMATION
+
+Use three levels:
+
+### READ
+
+No confirmation.
+
+Examples:
+
+```text
+Read attendance
+Read assignment
+Search opportunities
+List files
+```
+
+### MODIFY
+
+Usually confirmation depending on risk.
+
+Examples:
+
+```text
+Create README
+Create task
+Download document
+Edit file
+```
+
+### EXTERNAL / CONSEQUENCE
+
+Always confirmation.
+
+Examples:
+
+```text
+Submit assignment
+Send email
+Apply to program
+Submit competition
+Push code
+Delete file
+Send message
+```
+
+---
+
+# 44. OBSERVABILITY
+
+Create logs for:
+
+```text
+AI calls
+Tool calls
+DigiCampus sync
+Opportunity sync
+File changes
+Notifications
+PC automation
+Errors
+User approvals
+```
+
+Provide a UI to inspect logs.
+
+---
+
+# 45. DATABASE DESIGN
+
+At minimum create tables/entities for:
+
+```text
+users
+subjects
+classes
+assignments
+documents
+attendance
+tasks
+task_dependencies
+opportunities
+applications
+organizations
+repositories
+career_goals
+notifications
+sync_runs
+activity_logs
+ai_runs
+user_preferences
+```
+
+Use migrations.
+
+Do not hardcode database structure into application logic.
+
+---
+
+# 46. API DESIGN
+
+Create clean APIs such as:
+
+```text
+GET /api/dashboard
+GET /api/subjects
+GET /api/assignments
+GET /api/documents
+GET /api/attendance
+GET /api/classes
+GET /api/tasks
+GET /api/opportunities
+GET /api/applications
+
+POST /api/sync/academic
+POST /api/sync/opportunities
+
+POST /api/tasks
+PATCH /api/tasks/{id}
+
+POST /api/chat
+POST /api/automation/execute
+```
+
+Document all APIs.
+
+---
+
+# 47. TESTING STRATEGY
+
+Testing is mandatory.
+
+Every phase must have:
+
+### Unit tests
+
+Test individual functions.
+
+### Integration tests
+
+Test modules working together.
+
+### End-to-end tests
+
+Test real user workflows where safely possible.
+
+### Failure tests
+
+Intentionally test:
+
+* network unavailable
+* login failure
+* malformed response
+* missing files
+* duplicate documents
+* expired deadlines
+* AI failure
+* notification failure
+
+### Security tests
+
+Test:
+
+* unauthorized tool execution
+* path traversal
+* command injection
+* unauthorized external action
+* secret leakage
+
+---
+
+# 48. REQUIRED PHASE CHECKPOINT
+
+After every phase:
+
+```text
+1. Implement
+2. Run tests
+3. Fix failures
+4. Run lint/type checks
+5. Run application
+6. Manually verify feature
+7. Update documentation
+8. Commit changes
+9. Report phase status
+```
+
+Do NOT move to the next phase with failing tests unless the failure is explicitly documented and non-blocking.
+
+---
+
+# 49. PHASE-BY-PHASE DEVELOPMENT ORDER
+
+Build in this order:
+
+```text
+PHASE 0
+Environment discovery
+
+PHASE 1
+Project foundation
+
+PHASE 2
+Local 3year filesystem manager
+
+PHASE 3
+DigiCampus connector
+
+PHASE 4
+Academic synchronization engine
+
+PHASE 5
+Assignment + Todo engine
+
+PHASE 6
+Special Lab practice engine
+
+PHASE 7
+Attendance engine
+
+PHASE 8
+Academic dashboard
+
+PHASE 9
+Opportunity discovery engine
+
+PHASE 10
+GSoC/Fellowship/Mentorship tracker
+
+PHASE 11
+Competition + free-credit discovery
+
+PHASE 12
+Gemini CLI/API integration
+
+PHASE 13
+AI chatbot
+
+PHASE 14
+PC automation
+
+PHASE 15
+Antigravity integration
+
+PHASE 16
+Mobile interface
+
+PHASE 17
+Notifications
+
+PHASE 18
+Daily briefing + weekly review
+
+PHASE 19
+Security hardening
+
+PHASE 20
+Full integration testing
+
+PHASE 21
+Deployment + backup + documentation
+```
+
+---
+
+# 50. DEFINITION OF DONE
+
+The project is complete only when the following workflow works:
+
+## Academic workflow
+
+```text
+Open dashboard
+      ↓
+Sync DigiCampus
+      ↓
+Subjects discovered
+      ↓
+Assignments discovered
+      ↓
+Teacher documents discovered
+      ↓
+Local 3year folder compared
+      ↓
+Missing documents identified/downloaded
+      ↓
+Assignments become todos
+      ↓
+Special Lab assignments become practice tasks
+      ↓
+Subjects without assignments generate small review/README tasks
+      ↓
+Attendance updated
+      ↓
+Dashboard updated
+```
+
+---
+
+## Career workflow
+
+```text
+Refresh opportunities
+      ↓
+Gemini/web research
+      ↓
+Verify official sources
+      ↓
+Find new opportunities
+      ↓
+Filter solo opportunities
+      ↓
+Filter eligibility
+      ↓
+Find deadlines
+      ↓
+Update opportunity database
+      ↓
+Create actionable tasks
+      ↓
+Track preparation
+      ↓
+Track applications
+```
+
+---
+
+## AI workflow
+
+User:
+
+```text
+"What should I do today?"
+```
+
+AI should combine:
+
+```text
+Academic tasks
++
+deadlines
++
+attendance
++
+lab practice
++
+career opportunities
++
+GSoC progress
++
+applications
+```
+
+and produce a concise actionable plan.
+
+---
+
+## PC workflow
+
+User:
+
+```text
+"Open Antigravity and create the README for today's NLP class."
+```
+
+System:
+
+```text
+Identify class
+↓
+Retrieve relevant data
+↓
+Construct prompt according to user preferences
+↓
+Open Antigravity
+↓
+Execute permitted automation
+↓
+Create README
+↓
+Save locally
+↓
+Record activity
+↓
+Show result
+```
+
+---
+
+# 51. IMPORTANT DEVELOPMENT RULE
+
+Do NOT attempt to build all 21 phases simultaneously.
+
+Work sequentially.
+
+At the beginning of each phase, state:
+
+```text
+PHASE X — NAME
+
+Goal:
+...
+
+Files/modules to create:
+...
+
+Dependencies:
+...
+
+Acceptance criteria:
+...
+
+Tests:
+...
+```
+
+At the end:
+
+```text
+PHASE X COMPLETE
+
+Implemented:
+...
+
+Tests:
+X passed
+X failed
+
+Manual verification:
+...
+
+Known issues:
+...
+
+Next phase:
+...
+```
+
+---
+
+# 52. FIRST TASK
+
+Start ONLY with PHASE 0.
+
+Do not build the entire application yet.
+
+Inspect the current machine and project environment.
+
+Inspect the existing `3year` folder without modifying it.
+
+Determine the available technology stack and tools.
+
+Then produce:
+
+```text
+PROJECT_STATUS.md
+ARCHITECTURE.md
+ENVIRONMENT.md
+```
+
+and a proposed implementation plan.
+
+After Phase 0 testing passes, proceed to Phase 1.
+
+The goal is to build this as a **real, maintainable personal command center**, not as a toy demo or a collection of disconnected scripts.
+
+Prioritize reliability, source verification, security, modularity, and actual automation over flashy UI.

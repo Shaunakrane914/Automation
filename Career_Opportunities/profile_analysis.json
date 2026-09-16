@@ -1,0 +1,108 @@
+{
+  "candidate": {
+    "name": "Shaunak Rane",
+    "location": "Dombivli / Thane, Maharashtra, India",
+    "email": "shaunakrane914@gmail.com",
+    "phone": "+91 9320221211",
+    "university": "Universal AI University",
+    "degree": "B.Tech in Artificial Intelligence & Machine Learning",
+    "graduation_year": 2028,
+    "cgpa": 8.4,
+    "work_authorization": "India",
+    "preferred_work_mode": "Remote / Hybrid (Mumbai / Thane / Pune / Bengaluru)",
+    "profiles": {
+      "linkedin": "https://www.linkedin.com/in/shaunak-rane-3980582ba/",
+      "github": "https://github.com/Shaunakrane914"
+    }
+  },
+  "extracted_requirements": {
+    "internships_and_roles": {
+      "target_titles": [
+        "AI Engineer Intern",
+        "Generative AI / LLM Intern",
+        "Agentic AI Intern",
+        "AI Backend Engineer Intern",
+        "Applied Machine Learning Intern",
+        "Applied Scientist Intern",
+        "ML Systems / MLOps Intern"
+      ],
+      "previous_experience": {
+        "company": "Univitt AI Technologies",
+        "role": "Software Engineer / AI Engineering Intern",
+        "duration": "3 months (May 2026 - Aug 2026 / Apr 2025 - Jul 2025)",
+        "deliverables": "End-to-end ML project for Sodexo. Preprocessed food consumption datasets, trained regression and time-series models for meal demand forecasting, and deployed real-time FastAPI endpoints."
+      },
+      "eligibility_constraints": {
+        "status": "Currently enrolled undergraduate (3rd year)",
+        "graduation_window": "May 2028 (accepts 2027/2028 batches)",
+        "excluded": "Roles restricted strictly to completed graduates or 2025/2026 pass-outs"
+      },
+      "tone_and_framing": "High technical density, execution-oriented, first-person ownership of both backend pipelines and machine learning algorithms."
+    },
+    "projects_and_architecture": {
+      "portfolio_evidence": [
+        {
+          "name": "Project Aegis",
+          "domain": "Agentic AI & Misinformation Triage",
+          "stack": ["Python", "FastAPI", "Gemini API", "Supabase (pgvector)", "WebSockets", "Docker"],
+          "highlights": "6 autonomous agents orchestrating real-time triage, custom linguistic pattern detection ML model, vector similarity search, live-monitoring dashboard."
+        },
+        {
+          "name": "Gridium Protocol",
+          "domain": "Microgrid Energy Optimization",
+          "stack": ["Python", "PyTorch", "FastAPI", "DDPG (Reinforcement Learning)", "WebSockets"],
+          "highlights": "Actor-Critic continuous action reinforcement learning for multi-agent microgrid power balancing."
+        },
+        {
+          "name": "TopoFlow",
+          "domain": "GNN Fluid Dynamics Simulation",
+          "stack": ["Python", "PyTorch Geometric", "GraphSAGE"],
+          "highlights": "Message-passing graph neural networks for complex fluid dynamic simulations."
+        },
+        {
+          "name": "Yield AI (KrushiMitra)",
+          "domain": "AgriTech Crop Prediction",
+          "stack": ["React", "TypeScript", "Tailwind CSS", "Python", "Microservices"],
+          "highlights": "Mobile-first responsive interface with modular data pipelines predicting crop yield from dynamic weather parameters."
+        },
+        {
+          "name": "Food Waste Management",
+          "domain": "Supply Chain & Inventory",
+          "stack": ["Flask", "MySQL", "Microservices"],
+          "highlights": "Dual-database MySQL architecture, automated Bill of Materials (BOM) calculation microservice."
+        }
+      ],
+      "architectural_preferences": "Modular microservices, high-speed FastAPI backends, asynchronous data pipelines, real-time WebSocket feeds, minimal boilerplate."
+    },
+    "certifications_and_credentials": {
+      "completed": [
+        "Google Cloud - Introduction to Generative AI",
+        "Google Cloud - Introduction to Large Language Models",
+        "Google Cloud - Skill Badge in Prompt Design in Vertex AI",
+        "IBM / edX - AI for Everyone: Master the Basics",
+        "DataCamp - Understanding Prompt Engineering",
+        "CodeChef - Learn C Programming"
+      ],
+      "targeted_high_roi": [
+        {
+          "name": "AWS Certified Machine Learning Engineer - Associate (MLA-C01 / MLA-C02)",
+          "status": "Targeting Beta exam at $75 USD",
+          "value": "Enterprise cloud ML deployment, SageMaker pipelines, model serving."
+        },
+        {
+          "name": "Databricks Certified Generative AI Engineer Associate",
+          "status": "Targeting with 50% discount voucher",
+          "value": "RAG architectures, vector search indexes, LLM evaluation metrics."
+        }
+      ],
+      "rule": "Exclude generic beginner certificates; prioritize industry-recognized proctored cloud/ML credentials."
+    },
+    "technical_stack_summary": {
+      "languages": ["Python", "C", "C++", "TypeScript", "JavaScript", "SQL"],
+      "frameworks_and_backend": ["FastAPI", "Flask", "Django", "Node.js", "Docker", "REST microservices", "WebSockets"],
+      "ml_and_data": ["PyTorch", "PyTorch Geometric", "Reinforcement Learning (DDPG)", "Scikit-learn", "XGBoost", "Pandas", "NumPy", "Statsmodels", "Time-Series", "Anomaly Detection"],
+      "databases": ["PostgreSQL (Supabase pgvector)", "MySQL", "SQLite"],
+      "cloud_and_devops": ["Google Cloud Platform (GCP)", "AWS", "Git", "GitHub Actions", "Linux", "pytest"]
+    }
+  }
+}

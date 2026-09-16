@@ -1,0 +1,29 @@
+[
+  {
+    "courseId": 1072,
+    "courseVersionId": 1247,
+    "version": 2,
+    "courseName": "Summer Internship-I [SKD5.52002]",
+    "courseCode": "SKD5.52002",
+    "courseCredits": 2,
+    "description": null,
+    "departmentId": 143,
+    "departmentName": "School of Ai and Future Technologies",
+    "termId": null,
+    "sessionId": null,
+    "id": 3552,
+    "className": "Summer Internship (SIP)-I-Mr.PM",
+    "referenceId": null,
+    "sectionId": null,
+    "batch": "Summer Internship (SIP)-I-Mr.PM",
+    "faculty": null,
+    "courseComponentTypeId": 10,
+    "courseComponentTypeName": "Internship",
+    "isSubstitute": false,
+    "facultyUkid": null,
+    "classroomSyncRule": null,
+    "isSyncedWithExternalProvider": false,
+    "externalProviderSyncedTimestamp": null,
+    "$$hashKey": "object:59"
+  }
+]
