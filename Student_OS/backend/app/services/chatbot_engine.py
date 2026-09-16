@@ -3,6 +3,7 @@ import re
 import sys
 import json
 import logging
+import asyncio
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -172,6 +173,9 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
 2. Maintain clean architecture: no loose scripts in root, proper typing, and modern dark workstation aesthetics.
 3. Automatically run verification (e.g. backend tests, build scripts, endpoint checks).
 4. Stage and commit changes with a concise git message and push to `origin {git_branch}`.
+
+## 5. Active User Profile & Preferences
+{user_profile_snippet if user_profile_snippet else "Standard Universal AI University Automation Workstation Profile"}
 
 ---
 *Directive Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | Directive File: `{prompt_file.name}`*
@@ -371,6 +375,7 @@ def process_chat_query(query: str) -> Dict[str, Any]:
             if ql.startswith(prefix):
                 cmd = q[len(prefix):].strip()
                 break
+        cmd = cmd.rstrip(".!?;")
         res = tool_execute_command(cmd)
         reply = (
             f"💻 **Executed Terminal Command:** `{cmd}`\n\n"
@@ -407,11 +412,29 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         reply = f"🚀 **Launched {app_target.upper()}**\n\nTarget path: `{param or 'Default'}`\nResult: {res['message']}"
         return {"response": reply, "tool_used": "open_application", "details": res}
 
-    # 4. Sync & Rerun
-    if any(k in ql for k in ["sync", "update", "rerun", "crawl", "digicampus audit"]):
-        # Trigger sync
+    # 4. Changes / History Queries
+    if any(k in ql for k in ["what changed", "changes", "since last sync", "recent changes", "history"]):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT timestamp, level, message FROM agent_logs ORDER BY id DESC LIMIT 5")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        lines = ["📋 **Recent Sync Activity & System Changes:**\n"]
+        for r in rows:
+            lines.append(f"- `[{r['timestamp']}]` **[{r['level']}]** {r['message']}")
+        return {"response": "\n".join(lines), "tool_used": "sync_or_logs"}
+
+    # 5. Sync & Rerun
+    if any(k in ql for k in ["rerun", "trigger sync", "resync", "update now", "run sync", "crawl", "digicampus audit", "rerun digicampus"]):
+        # Trigger sync safely
         from app.services.digicampus_scraper import sync_digicampus
-        asyncio.create_task(sync_digicampus())
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(sync_digicampus())
+        except RuntimeError:
+            import threading
+            threading.Thread(target=lambda: asyncio.run(sync_digicampus()), daemon=True).start()
+
         reply = (
             f"🔄 **DigiCampus Audit & Update Triggered**\n\n"
             f"The crawler is now connecting to your active Chrome browser session on port 9222. "
@@ -458,7 +481,7 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         return {"response": reply, "tool_used": "academic_status", "details": res}
 
     # 7. Career & Competitions
-    if any(k in ql for k in ["internship", "job", "hackathon", "competition", "fellowship", "opportunity"]):
+    if any(k in ql for k in ["internship", "job", "hackathon", "competition", "fellowship", "opportunity", "opportunities", "solo competition"]):
         res = tool_career_radar()
         lines = [f"🏆 **Active Career Radar ({res['count']} Opportunities):**\n"]
         for opp in res['opportunities']:
@@ -466,7 +489,7 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         return {"response": "\n".join(lines), "tool_used": "career_radar", "details": res}
 
     # 8. Action Items / Daily Todos
-    if any(k in ql for k in ["todo", "action item", "priorities", "what to do"]):
+    if any(k in ql for k in ["todo", "action item", "priorities", "what to do", "need to do", "to do today"]):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT title, category, due_date FROM daily_todos WHERE completed = 0 ORDER BY due_date ASC")

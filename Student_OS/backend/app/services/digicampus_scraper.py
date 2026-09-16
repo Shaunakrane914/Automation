@@ -111,6 +111,13 @@ async def sync_digicampus(broadcast_fn: Optional[Callable] = None):
 
     await asyncio.to_thread(proc.wait)
 
+    if proc.returncode != 0:
+        err_msg = f"DigiCampus sync crawler failed with exit code {proc.returncode}"
+        logger.error(err_msg)
+        log_agent_event("ERROR", err_msg)
+        await notify("SYNC_FAILED", {"message": err_msg, "exit_code": proc.returncode})
+        return
+
     # Load updated audit results from JSON dump
     audit_file = DATA_DIR / "digicampus_complete_audit.json"
     audit_results = []

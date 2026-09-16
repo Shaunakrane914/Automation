@@ -51,8 +51,14 @@ def init_db():
         is_lab INTEGER DEFAULT 0,
         status TEXT DEFAULT 'pending',
         local_lab_dir TEXT,
-        FOREIGN KEY (subject_id) REFERENCES subjects (id)
+        FOREIGN KEY (subject_id) REFERENCES subjects (id),
+        UNIQUE(subject_id, title)
     );
+    """)
+
+    cursor.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_assignments_subject_title 
+    ON assignments(subject_id, title);
     """)
 
     # 4. Career Radar table

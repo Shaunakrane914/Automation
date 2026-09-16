@@ -1,0 +1,42 @@
+{
+  "workflow_a_academics": {
+    "status": "PASS",
+    "duration_ms": 2941.32,
+    "subjects": 15,
+    "documents": 453,
+    "assignments": 20,
+    "local_folders_mapped": 12
+  },
+  "workflow_b_career": {
+    "status": "PASS",
+    "duration_ms": 40.42,
+    "opportunities_count": 8,
+    "todos_count": 4
+  },
+  "workflow_c_chatbot": {
+    "status": "PASS",
+    "duration_ms": 43.15,
+    "academic_query_tool": "academic_status",
+    "career_query_tool": "career_radar",
+    "task_created_id": 7
+  },
+  "workflow_d_antigravity": {
+    "status": "PASS",
+    "duration_ms": 110.33,
+    "directive_generated": true,
+    "profile_embedded": true
+  },
+  "workflow_e_notifications": {
+    "status": "PASS (NETWORK DELIVERY VERIFIED; DEVICE RECEIPT NOT DIRECTLY VERIFIABLE)",
+    "duration_ms": 1175.73,
+    "network_delivered": true
+  },
+  "workflow_f_git": {
+    "status": "PASS",
+    "duration_ms": 79.39,
+    "remote_verified": true,
+    "branch": "main",
+    "commit_hash": "36a0a2d0"
+  },
+  "overall_status": "PASS"
+}

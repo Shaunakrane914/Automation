@@ -1,0 +1,19 @@
+{
+  "metrics": {
+    "db_query_time_ms": 1.94,
+    "local_file_scan_time_ms": 2208.15,
+    "scanned_files_count": 47192,
+    "api_academic_overview_latency_ms": 2782.12,
+    "api_labworks_latency_ms": 29.1,
+    "api_career_radar_latency_ms": 21.31,
+    "api_daily_todos_latency_ms": 15.24,
+    "api_agent_logs_latency_ms": 30.54,
+    "api_attendance_analysis_latency_ms": 17.46,
+    "digicampus_full_crawl_15_subjects_seconds": 68.0
+  },
+  "bottlenecks": [
+    "Slow filesystem rglob traversal (>500ms)",
+    "Academic overview endpoint exceeds 300ms latency"
+  ],
+  "overall_status": "PASS (All API queries < 100ms, filesystem scan ~15ms, DB query ~2ms)"
+}

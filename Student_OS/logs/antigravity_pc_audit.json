@@ -1,0 +1,33 @@
+{
+  "launchers": {
+    "code": {
+      "command": "code <path>",
+      "configured": true
+    },
+    "terminal": {
+      "command": "start powershell",
+      "configured": true
+    },
+    "explorer": {
+      "command": "explorer <path>",
+      "configured": true
+    },
+    "antigravity": {
+      "binary_exists": true,
+      "path": "C:\\Users\\Shaunak Rane\\AppData\\Local\\Programs\\Antigravity\\Antigravity.exe"
+    }
+  },
+  "user_profile_injection": {
+    "profile_modified": true,
+    "marker_in_generated_prompt": true,
+    "prompt_file": "C:\\Users\\Shaunak Rane\\Desktop\\Projects\\Automation\\Student_OS\\backend\\data\\antigravity_prompts\\antigravity_task_20260916_125427.md",
+    "prompt_size_bytes": 3129
+  },
+  "antigravity_directive_generation": {
+    "directive_created": true,
+    "clipboard_attempted": true,
+    "launcher_status": "Antigravity IDE launched targeting C:\\Users\\Shaunak Rane\\Desktop\\Projects\\Automation"
+  },
+  "cleanup_verified": true,
+  "overall_status": "PASS"
+}

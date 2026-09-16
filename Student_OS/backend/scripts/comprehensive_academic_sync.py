@@ -49,8 +49,16 @@ async def run_sync():
     async with async_playwright() as p:
         browser = await p.chromium.connect_over_cdp("http://127.0.0.1:9222")
         context = browser.contexts[0]
-        page = [pg for pg in context.pages if "digiicampus.com" in pg.url][0]
-        await page.bring_to_front()
+        matching_pages = [pg for pg in context.pages if "digiicampus.com" in pg.url]
+        if matching_pages:
+            page = matching_pages[0]
+            await page.bring_to_front()
+        else:
+            page = await context.new_page()
+            await page.goto("https://uai.digiicampus.com/feed", timeout=20000)
+
+        if "login" in page.url.lower():
+            raise RuntimeError("FAIL — AUTHENTICATION SESSION EXPIRED: DigiCampus redirected to login.")
 
         results = []
 

@@ -1,0 +1,65 @@
+{
+  "query_results": {
+    "What do I need to do today?": {
+      "expected_tool": "daily_todos",
+      "actual_tool": "daily_todos",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83d\udccc **Today's Action Items & Priorities:**\n\n1. **[Academic]** Check DigiCampus for new lecture uploads in 3rd year subjects (Due: `2026-09-16`)\n2. **[Career]** Su..."
+    },
+    "What assignments are pending?": {
+      "expected_tool": "academic_status",
+      "actual_tool": "academic_status",
+      "grounded_in_data": true,
+      "response_snippet": "\u23f3 **Pending Assignments (20):**\n- **[Exp 1] Single-Layer Perceptron Logic Gates (AND, OR, NAND, NOR)** (Deep Learning (Neural Network) [DSC5.52001]) \u2014 Due: `202..."
+    },
+    "Check my attendance.": {
+      "expected_tool": "academic_status",
+      "actual_tool": "academic_status",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83d\udcca **Academic Attendance Overview:** Overall 89.9%\n\nTracked Subjects: 15 | Threshold: 75.0% Required\n\n\u2705 **All enrolled courses are currently safe above the atten..."
+    },
+    "What changed since my last sync?": {
+      "expected_tool": "sync_or_logs",
+      "actual_tool": "sync_or_logs",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83d\udccb **Recent Sync Activity & System Changes:**\n\n- `[2026-09-16T12:54:07.649164]` **[INFO]** Initiating live DigiCampus synchronization & audit...\n- `[2026-09-16T1..."
+    },
+    "Find solo competitions.": {
+      "expected_tool": "career_radar",
+      "actual_tool": "career_radar",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83c\udfc6 **Active Career Radar (0 Opportunities):**\n"
+    },
+    "What opportunities are closing soon?": {
+      "expected_tool": "career_radar",
+      "actual_tool": "career_radar",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83c\udfc6 **Active Career Radar (0 Opportunities):**\n"
+    },
+    "Open my Deep Learning folder.": {
+      "expected_tool": "open_application",
+      "actual_tool": "open_application",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83d\ude80 **Launched EXPLORER**\n\nTarget path: `c:\\Users\\Shaunak Rane\\Desktop\\3rd Year\\Deep Learning`\nResult: Launched explorer successfully."
+    },
+    "Run git status.": {
+      "expected_tool": "execute_command",
+      "actual_tool": "execute_command",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83d\udcbb **Executed Terminal Command:** `git status`\n\n```text\nOn branch main\nYour branch is up to date with 'origin/main'.\n\nChanges not staged for commit:\n  (use \"git ..."
+    },
+    "Rerun DigiCampus sync.": {
+      "expected_tool": "sync_digicampus",
+      "actual_tool": "sync_digicampus",
+      "grounded_in_data": true,
+      "response_snippet": "\ud83d\udd04 **DigiCampus Audit & Update Triggered**\n\nThe crawler is now connecting to your active Chrome browser session on port 9222. It will audit all 15 subjects, cros..."
+    }
+  },
+  "data_grounding_audit": {
+    "db_subjects": 15,
+    "db_open_assignments": 0,
+    "db_open_career_opps": 0,
+    "hallucination_detected": false
+  },
+  "overall_status": "PASS"
+}

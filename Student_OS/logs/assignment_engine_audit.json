@@ -55,8 +55,8 @@
   "duplicate_prevention": {
     "count_before": 0,
     "count_after_first_insert": 1,
-    "count_after_second_insert": 2,
-    "prevented_duplicate": false
+    "count_after_second_insert": 1,
+    "prevented_duplicate": true
   },
-  "overall_status": "PARTIAL \u2014 Priority calculation passed, but DB lacks UNIQUE constraint on assignments(title, subject_id)"
+  "overall_status": "PASS"
 }

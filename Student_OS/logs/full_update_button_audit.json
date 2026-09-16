@@ -1,0 +1,36 @@
+{
+  "button_found": true,
+  "first_run": {
+    "counts_before": {
+      "subjects": 15,
+      "documents": 453,
+      "assignments": 20
+    },
+    "counts_after": {
+      "subjects": 15,
+      "documents": 453,
+      "assignments": 20
+    }
+  },
+  "second_run": {
+    "counts_before": {
+      "subjects": 15,
+      "documents": 453,
+      "assignments": 20
+    },
+    "counts_after": {
+      "subjects": 15,
+      "documents": 453,
+      "assignments": 20
+    }
+  },
+  "ui_changes_observed": [
+    "Progress text appeared on button / banner",
+    "T+0s: Student OS\nV2.4 WORKSTATION\n\nUniversal AI Universi...",
+    "T+1s: Student OS\nV2.4 WORKSTATION\n\nUniversal AI Universi...",
+    "Sync 1 completed around T+67s",
+    "Sync 2 completed around T+72s"
+  ],
+  "duplication_detected": false,
+  "overall_status": "PASS"
+}

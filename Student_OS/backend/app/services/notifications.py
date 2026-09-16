@@ -58,9 +58,10 @@ async def send_telegram_notification(message: str):
         logger.error(f"Failed to send telegram notification: {e}")
     return False
 
-async def dispatch_alert(title: str, message: str, priority: str = "default", tags: str = "bell"):
+async def dispatch_alert(title: str, message: str, priority: str = "default", tags: str = "bell") -> bool:
     """
     Unified dispatcher to all active mobile channels.
     """
-    await send_ntfy_notification(title=title, message=message, priority=priority, tags=tags)
-    await send_telegram_notification(f"*{title}*\n{message}")
+    n_res = await send_ntfy_notification(title=title, message=message, priority=priority, tags=tags)
+    t_res = await send_telegram_notification(f"*{title}*\n{message}")
+    return bool(n_res or t_res)

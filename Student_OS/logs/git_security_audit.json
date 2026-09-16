@@ -1,0 +1,23 @@
+{
+  "git_remote": {
+    "output": "origin\thttps://github.com/Shaunakrane914/Automation.git (fetch)\norigin\thttps://github.com/Shaunakrane914/Automation.git (push)",
+    "has_correct_repo": true
+  },
+  "git_branch": {
+    "branch": "main"
+  },
+  "git_status": {
+    "clean": false,
+    "uncommitted_lines": 11
+  },
+  "tracked_sensitive_files": [
+    "Auto Apply/Auto_job_applier_linkedIn/config/secrets_TEMPLATE.py",
+    "Student_OS/.env.example",
+    "Student_OS/backend/student_os.db"
+  ],
+  "privacy_security_concerns": [
+    "CRITICAL/HIGH: 'student_os.db' (live SQLite database with local audit data) is actively tracked in git and automatically pushed to public/remote repo during sync",
+    "CRITICAL: .env file containing API tokens is tracked in git repository"
+  ],
+  "overall_status": "PARTIAL \u2014 Git connected and functional, but security/privacy concern detected (student_os.db tracked in remote repo)"
+}

@@ -17,13 +17,30 @@ DANGEROUS_PATTERNS = [
     "rm -rf", "del /s", "del /f", "format ", "rmdir /s", "drop table", "shutdown", ">nul 2>&1"
 ]
 
+CHAINING_OPERATORS = ["&&", "||", ";", "|", "&"]
+DISALLOWED_PATTERNS = ["../", "..\\", "curl -x post", "curl -d", "wget --post"]
+
 def is_safe_command(command: str) -> bool:
     cmd_clean = command.strip().lower()
     for pattern in DANGEROUS_PATTERNS:
         if pattern in cmd_clean:
             return False
+
+    # Block directory traversal
+    for dis in DISALLOWED_PATTERNS:
+        if dis in cmd_clean:
+            return False
+
+    # Block unquoted command chaining
+    for op in CHAINING_OPERATORS:
+        if op in cmd_clean:
+            # Check if it's chained rather than inside a quoted argument
+            parts = cmd_clean.split(op)
+            if len(parts) > 1 and any(p.strip() for p in parts[1:]):
+                return False
+
     for prefix in ALLOWED_COMMAND_PREFIXES:
-        if cmd_clean.startswith(prefix):
+        if cmd_clean == prefix or cmd_clean.startswith(prefix + " "):
             return True
     return False
 
