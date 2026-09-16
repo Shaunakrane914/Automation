@@ -165,6 +165,15 @@ async def sync_digicampus(broadcast_fn: Optional[Callable] = None):
                 VALUES (?, ?, ?, ?, ?)
                 """, (subject_id, lf, str(Path(local_dir) / lf), datetime.now().strftime("%Y-%m-%d"), "Local Academic File"))
 
+            for asg in item.get("ongoing_assignments", []):
+                title = asg.get("title", "")
+                if title:
+                    is_lab = 1 if "lab" in name.lower() or "lab" in title.lower() else 0
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO assignments (subject_id, title, deadline, is_lab, status, local_lab_dir)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, (subject_id, title, asg.get("due_date", ""), is_lab, "pending", local_dir))
+
             for asg in item.get("closed_assignments", []):
                 title = asg.get("title", "")
                 if title:

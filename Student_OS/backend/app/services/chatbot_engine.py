@@ -588,6 +588,54 @@ def process_chat_query(query: str) -> Dict[str, Any]:
             lines.append(f"- {badge} **{s['name']}**: `{s['attendance_percentage']}%`")
         return {"response": "\n".join(lines), "tool_used": "academic_status", "details": res}
 
+    # 9b. Assignments & Coursework Submissions
+    if any(k in ql for k in ["assignment", "assignments", "homework", "pending work", "submissions", "pending task"]):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+        SELECT a.id, a.title, a.deadline, a.status, s.name as subject_name, a.is_lab
+        FROM assignments a
+        JOIN subjects s ON a.subject_id = s.id
+        WHERE LOWER(a.status) = 'pending'
+        ORDER BY a.deadline ASC
+        """)
+        pending_asgs = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+
+        if not pending_asgs:
+            return {
+                "response": "🎉 **Zero Pending Assignments!**\n\nAll classroom assignments and lab experiments are currently caught up and marked complete. No action required.",
+                "tool_used": "assignments_status",
+                "details": {"pending_count": 0}
+            }
+
+        lines = [
+            f"⏳ **Pending Assignments & Coursework ({len(pending_asgs)} Action Required)**\n",
+            "Here are your active pending assignments tracked dynamically in SQLite:\n"
+        ]
+
+        # Group by subject
+        by_subject = {}
+        for a in pending_asgs:
+            sname = a["subject_name"].split("[")[0].strip()
+            by_subject.setdefault(sname, []).append(a)
+
+        for sname, items in by_subject.items():
+            lines.append(f"### 📘 {sname} ({len(items)} Pending)")
+            for item in items:
+                due_str = f"Due: `{item['deadline']}`" if item['deadline'] else "No fixed deadline"
+                lab_tag = "🔬 Lab" if item.get('is_lab') else "📝 Assignment"
+                lines.append(f"- **{item['title']}** ({lab_tag} • {due_str})")
+            lines.append("")
+
+        lines.append("💡 *Tip: You can toggle any assignment to completed or scaffold starter code directly from the Classroom tab in your dashboard.*")
+
+        return {
+            "response": "\n".join(lines),
+            "tool_used": "assignments_status",
+            "details": {"pending_count": len(pending_asgs), "assignments": pending_asgs}
+        }
+
     # 10. Multi-Step Query / ReAct Agent Trigger
     if any(k in ql for k in ["and then", "and list", "check if", "find and", "search and", "if there is"]):
         agent_answer = run_agentic_react_loop(q)

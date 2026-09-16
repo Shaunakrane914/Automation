@@ -269,44 +269,69 @@ def run_auto_apply_pipeline(
         return summary
 
     with sync_playwright() as p:
-        for index, opp in enumerate(opportunities, start=1):
-            opp_name = opp.get("name", "Unknown")
-            safe_log(f"[{index}/{len(opportunities)}] Processing: {opp_name}...")
-            
-            if progress_callback:
+        chrome_exe = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+        user_data_dir = str(AUTO_APPLY_DIR / "chrome_profile_persistent")
+        shared_context = None
+        own_context = False
+        try:
+            try:
+                browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
+                shared_context = browser.contexts[0] if browser.contexts else browser.new_context()
+                safe_log("[AutoApply] Connected via Chrome CDP 127.0.0.1:9222")
+            except Exception:
+                safe_log("[AutoApply] Launching visible Google Chrome with authenticated persistent profile...")
+                shared_context = p.chromium.launch_persistent_context(
+                    user_data_dir,
+                    headless=False,
+                    executable_path=chrome_exe if os.path.exists(chrome_exe) else None,
+                    args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
+                )
+                own_context = True
+
+            for index, opp in enumerate(opportunities, start=1):
+                opp_name = opp.get("name", "Unknown")
+                safe_log(f"[{index}/{len(opportunities)}] Processing: {opp_name}...")
+                
+                if progress_callback:
+                    try:
+                        progress_callback({
+                            "type": "AUTO_APPLY_PROGRESS",
+                            "run_id": run_id,
+                            "current": index,
+                            "total": len(opportunities),
+                            "opportunity": opp_name,
+                            "status": "in_progress"
+                        })
+                    except Exception:
+                        pass
+
+                # Execute application
                 try:
-                    progress_callback({
-                        "type": "AUTO_APPLY_PROGRESS",
-                        "run_id": run_id,
-                        "current": index,
-                        "total": len(opportunities),
-                        "opportunity": opp_name,
-                        "status": "in_progress"
+                    res = _sync_apply_to_opportunity(opp, resume_info, profile, shared_context, run_id)
+                    summary["results"].append(res)
+                    if res["status"] == "applied":
+                        summary["applied"] += 1
+                    elif res["status"] == "failed":
+                        summary["failed"] += 1
+                    else:
+                        summary["skipped"] += 1
+                except Exception as e:
+                    safe_log(f"[AutoApply] Fatal error applying to {opp_name}: {e}")
+                    summary["failed"] += 1
+                    summary["results"].append({
+                        "id": opp.get("id"),
+                        "name": opp_name,
+                        "status": "failed",
+                        "notes": str(e)
                     })
+
+                time.sleep(1)
+        finally:
+            if own_context and shared_context:
+                try:
+                    shared_context.close()
                 except Exception:
                     pass
-
-            # Execute application
-            try:
-                res = _sync_apply_to_opportunity(opp, resume_info, profile, p, run_id)
-                summary["results"].append(res)
-                if res["status"] == "applied":
-                    summary["applied"] += 1
-                elif res["status"] == "failed":
-                    summary["failed"] += 1
-                else:
-                    summary["skipped"] += 1
-            except Exception as e:
-                safe_log(f"[AutoApply] Fatal error applying to {opp_name}: {e}")
-                summary["failed"] += 1
-                summary["results"].append({
-                    "id": opp.get("id"),
-                    "name": opp_name,
-                    "status": "failed",
-                    "notes": str(e)
-                })
-
-            time.sleep(1)
 
     safe_log(f"\n{'='*70}")
     safe_log(f"[COMPLETED] {summary['applied']} Applied | {summary['failed']} Failed | {summary['skipped']} Skipped")
@@ -329,7 +354,7 @@ def _sync_apply_to_opportunity(
     opportunity: Dict[str, Any],
     resume_info: Dict[str, Any],
     profile: Dict[str, Any],
-    playwright_instance: Any,
+    context_or_playwright: Any,
     run_id: str
 ) -> Dict[str, Any]:
     """Sync helper for applying to a single opportunity."""
@@ -362,22 +387,135 @@ def _sync_apply_to_opportunity(
     own_browser = False
 
     try:
-        try:
-            browser = playwright_instance.chromium.connect_over_cdp("http://127.0.0.1:9222")
-            if browser.contexts:
-                context = browser.contexts[0]
-                page = context.new_page()
-            else:
-                context = browser.new_context()
-                page = context.new_page()
-        except Exception as cdp_err:
-            safe_log(f"[AutoApply] CDP connection note: {cdp_err}; using local browser")
-            browser = playwright_instance.chromium.launch(headless=True)
-            page = browser.new_page()
-            own_browser = True
+        creds = {
+            "email": "shaunakrane914@gmail.com",
+            "linkedin_password": "Shaunak34@ra",
+            "internshala_password": "shaunak43rane",
+            "indeed_password": "shaunak43rane"
+        }
+        # Load from secrets.py if present
+        secrets_file = AUTO_APPLY_DIR / "Auto_job_applier_linkedIn" / "config" / "secrets.py"
+        if secrets_file.exists():
+            try:
+                scope = {}
+                with open(secrets_file, "r", encoding="utf-8", errors="ignore") as f:
+                    exec(f.read(), scope)
+                if scope.get("username"):
+                    creds["email"] = scope["username"]
+                if scope.get("password"):
+                    creds["linkedin_password"] = scope["password"]
+            except Exception:
+                pass
+
+        if hasattr(context_or_playwright, "new_page") or hasattr(context_or_playwright, "pages"):
+            context = context_or_playwright
+            page = context.new_page()
+            own_browser = False
+        else:
+            playwright_instance = context_or_playwright
+            try:
+                browser = playwright_instance.chromium.connect_over_cdp("http://127.0.0.1:9222")
+                if browser.contexts:
+                    context = browser.contexts[0]
+                    page = context.new_page()
+                else:
+                    context = browser.new_context()
+                    page = context.new_page()
+            except Exception as cdp_err:
+                safe_log(f"[AutoApply] CDP connection note: {cdp_err}; opening visible Google Chrome with persistent profile...")
+                chrome_exe = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+                user_data_dir = str(AUTO_APPLY_DIR / "chrome_profile_persistent")
+                context = playwright_instance.chromium.launch_persistent_context(
+                    user_data_dir,
+                    headless=False,
+                    executable_path=chrome_exe if os.path.exists(chrome_exe) else None,
+                    args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
+                )
+                page = context.pages[0] if context.pages else context.new_page()
+                browser = context
+                own_browser = True
+
+        # Ensure authentication before navigating to opportunity
+        if "internshala.com" in url.lower():
+            safe_log("  [Auth] Verifying Internshala active login session...")
+            try:
+                page.goto("https://internshala.com/student/dashboard", wait_until="domcontentloaded", timeout=20000)
+                page.wait_for_timeout(2000)
+                # Dismiss promo modal if present
+                try:
+                    page.evaluate("if(document.getElementById('close_popup')) document.getElementById('close_popup').click();")
+                except Exception:
+                    pass
+
+                # Check if logged in
+                is_logged_in = "student/dashboard" in page.url or page.locator('.profile_icon, #profile_dropdown, .user_profile_holder').count() > 0
+                if is_logged_in:
+                    safe_log("  [Auth] Internshala session verified active as Shaunak Rane!")
+                else:
+                    page.goto("https://internshala.com/login/user", wait_until="domcontentloaded", timeout=15000)
+                    page.wait_for_timeout(1500)
+                    e_input = page.locator('#modal_email, #email, input[type="email"]').first
+                    if e_input.is_visible(timeout=2000):
+                        safe_log("  [Auth] Logging in to Internshala with provided credentials...")
+                        e_input.fill(creds["email"], timeout=1500)
+                        p_input = page.locator('#modal_password, #password, input[type="password"]').first
+                        p_input.fill(creds["internshala_password"], timeout=1500)
+                        page.locator('#modal_login_submit, button[type="submit"]').first.click(timeout=2000)
+                        page.wait_for_timeout(4000)
+                        safe_log("  [Auth] Internshala login submitted.")
+            except Exception as auth_err:
+                safe_log(f"  [Auth Note] {auth_err}")
+
+        elif "linkedin.com" in url.lower():
+            safe_log("  [Auth] Verifying LinkedIn active login session...")
+            try:
+                page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=20000)
+                page.wait_for_timeout(2000)
+                if "feed" in page.url.lower():
+                    safe_log("  [Auth] LinkedIn session verified active as Shaunak Rane!")
+                else:
+                    page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=15000)
+                    page.wait_for_timeout(2000)
+                    u_inputs = [inp for inp in page.locator("input[type='text'], input[type='email']").all() if inp.is_visible()]
+                    p_inputs = [inp for inp in page.locator("input[type='password']").all() if inp.is_visible()]
+                    if u_inputs and p_inputs:
+                        safe_log("  [Auth] Logging in to LinkedIn with provided credentials...")
+                        u_inputs[0].fill(creds["email"], timeout=1500)
+                        p_inputs[0].fill(creds["linkedin_password"], timeout=1500)
+                        page.locator("button[type='submit']").first.click(timeout=2000)
+                        page.wait_for_timeout(4000)
+                        safe_log("  [Auth] LinkedIn login submitted.")
+            except Exception as auth_err:
+                safe_log(f"  [Auth Note] {auth_err}")
+
+        elif "indeed.com" in url.lower():
+            safe_log("  [Auth] Verifying Indeed active login session...")
+            try:
+                page.goto("https://in.indeed.com/account/login", wait_until="domcontentloaded", timeout=20000)
+                page.wait_for_timeout(2000)
+                e_input = page.locator('input[type="email"], #ifl-InputFormField-3').first
+                if e_input.is_visible(timeout=2000):
+                    safe_log("  [Auth] Logging in to Indeed with provided credentials...")
+                    e_input.fill(creds["email"], timeout=1500)
+                    page.keyboard.press("Enter")
+                    page.wait_for_timeout(2000)
+                    p_input = page.locator('input[type="password"]').first
+                    if p_input.is_visible(timeout=2500):
+                        p_input.fill(creds["indeed_password"], timeout=1500)
+                        page.keyboard.press("Enter")
+                        page.wait_for_timeout(4000)
+                        safe_log("  [Auth] Indeed login submitted.")
+            except Exception as auth_err:
+                safe_log(f"  [Auth Note] {auth_err}")
+
+        # If it's a LinkedIn search URL, ensure f_AL=true (Easy Apply filter) is included
+        target_nav_url = url
+        if "linkedin.com/jobs/search" in target_nav_url.lower() and "f_al=true" not in target_nav_url.lower():
+            delim = "&" if "?" in target_nav_url else "?"
+            target_nav_url = f"{target_nav_url}{delim}f_AL=true"
 
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            page.goto(target_nav_url, wait_until="domcontentloaded", timeout=25000)
             page.wait_for_timeout(2500)
         except Exception as nav_err:
             safe_log(f"[AutoApply] Goto note: {nav_err}")
@@ -394,7 +532,7 @@ def _sync_apply_to_opportunity(
         cta_clicked = False
         uploaded_resume = False
 
-        # Press Escape key to dismiss full-screen splash modals (e.g. Lablab AMD modal)
+        # Press Escape key to dismiss full-screen splash modals
         try:
             page.keyboard.press("Escape")
             page.wait_for_timeout(600)
@@ -409,6 +547,8 @@ def _sync_apply_to_opportunity(
             'button:has-text("I Agree")',
             'button:has-text("Accept All Cookies")',
             'button[aria-label="Close"]',
+            'button.close',
+            '#close_popup',
             '.modal-close',
             '.close-btn',
             '[data-testid="close-button"]'
@@ -423,81 +563,210 @@ def _sync_apply_to_opportunity(
             except Exception:
                 pass
 
-        # If navigating to a portal root (like unstop.com or careers.microsoft.com or wellfound.com), perform automated search for the opportunity
-        parsed_path = url.split("://", 1)[-1].strip("/")
-        is_root_domain = "/" not in parsed_path or len(parsed_path.split("/")) == 1
-        if is_root_domain:
-            safe_log(f"  [Root Portal Detected] Searching for '{opp_name}' on portal...")
-            search_input_selectors = [
-                'input[placeholder*="Search" i]',
-                'input[type="search"]',
-                'input[name*="search" i]',
-                'input[id*="search" i]'
-            ]
-            for s_sel in search_input_selectors:
-                try:
-                    s_loc = page.locator(s_sel).first
-                    if s_loc.is_visible(timeout=1000):
-                        s_loc.fill(opp_name, timeout=1500)
-                        page.keyboard.press("Enter")
-                        page.wait_for_timeout(3000)
-                        filled_fields.append(f"Searched for '{opp_name}' on portal")
-                        break
-                except Exception:
-                    continue
+        # Platform Specific Handling: LinkedIn
+        if "linkedin.com" in url.lower():
+            safe_log("  [Platform: LinkedIn] Checking Easy Apply workflow...")
+            # If search page, select the first job card to reveal Easy Apply
+            try:
+                job_cards = page.locator(".job-card-container, .jobs-search-results-list li, .scaffold-layout__list-item")
+                if job_cards.count() > 0:
+                    job_cards.first.click(timeout=2500)
+                    page.wait_for_timeout(2000)
+            except Exception:
+                pass
 
-        # Portal Specific Handling: Unstop
-        if "unstop.com" in url.lower():
-            safe_log("  [Portal: Unstop] Checking registration flow...")
-            unstop_selectors = [
-                'button:has-text("Register")',
-                'a:has-text("Register")',
-                'button:has-text("Register Now")',
-                '.register-btn',
-                'button:has-text("Apply Now")'
+            linkedin_selectors = [
+                'button.jobs-apply-button',
+                'button:has-text("Easy Apply")',
+                '.jobs-apply-button--top-card button',
+                'button:has-text("Apply now")'
             ]
-            for u_sel in unstop_selectors:
+            for lk_sel in linkedin_selectors:
                 try:
-                    u_loc = page.locator(u_sel).first
-                    if u_loc.is_visible(timeout=1500):
-                        u_text = u_loc.inner_text().strip()
-                        u_loc.click(timeout=2500)
+                    lk_loc = page.locator(lk_sel).first
+                    if lk_loc.is_visible(timeout=2000):
+                        lk_text = lk_loc.inner_text().strip()
+                        lk_loc.click(timeout=2500)
                         cta_clicked = True
-                        filled_fields.append(f"Unstop CTA clicked: '{u_text}'")
-                        page.wait_for_timeout(2000)
-                        # Check for Individual participant option
-                        try:
-                            ind_loc = page.locator('text="Individual"').first
-                            if ind_loc.is_visible(timeout=1500):
-                                ind_loc.click(timeout=1500)
-                                filled_fields.append("Selected 'Individual' participant mode")
-                        except Exception:
-                            pass
-                        break
-                except Exception:
-                    pass
-
-        # Portal Specific Handling: Lablab
-        elif "lablab.ai" in url.lower():
-            safe_log("  [Portal: Lablab] Checking hackathon enrollment...")
-            lab_selectors = [
-                'button:has-text("Enroll")',
-                'button:has-text("Enroll for Hackathon")',
-                'a:has-text("Enroll")',
-                'button:has-text("Join Hackathon")'
-            ]
-            for l_sel in lab_selectors:
-                try:
-                    l_loc = page.locator(l_sel).first
-                    if l_loc.is_visible(timeout=1500):
-                        l_text = l_loc.inner_text().strip()
-                        l_loc.click(timeout=2500)
-                        cta_clicked = True
-                        filled_fields.append(f"Lablab CTA clicked: '{l_text}'")
+                        filled_fields.append(f"LinkedIn CTA clicked: '{lk_text}'")
                         page.wait_for_timeout(2000)
                         break
                 except Exception:
                     pass
+
+            # In Easy Apply modal:
+            try:
+                phone_loc = page.locator("input[id*='phoneNumber'], input[name*='phone']").first
+                if phone_loc.is_visible(timeout=1000):
+                    if not phone_loc.input_value():
+                        phone_loc.fill(profile["phone_digits"], timeout=1000)
+                        filled_fields.append("Filled LinkedIn phone number")
+            except Exception:
+                pass
+
+            # Upload resume if file input present
+            try:
+                file_input = page.locator("input[type='file']").first
+                if file_input.is_visible(timeout=800):
+                    file_input.set_input_files(resume_path, timeout=2000)
+                    uploaded_resume = True
+                    filled_fields.append(f"Attached resume: {resume_name}")
+            except Exception:
+                pass
+
+            # Advance Next / Review if present
+            try:
+                for _ in range(2):
+                    next_loc = page.locator("button:has-text('Next'), button[aria-label*='Continue'], button:has-text('Review')").first
+                    if next_loc.is_visible(timeout=1000):
+                        next_loc.click(timeout=1500)
+                        page.wait_for_timeout(1000)
+                    else:
+                        break
+            except Exception:
+                pass
+
+        # Platform Specific Handling: Internshala
+        elif "internshala.com" in url.lower():
+            safe_log("  [Platform: Internshala] Checking internship application workflow...")
+            # Dismiss promo modal if present
+            try:
+                page.evaluate("if(document.getElementById('close_popup')) document.getElementById('close_popup').click();")
+            except Exception:
+                pass
+
+            # If on search/listing page, select first internship card
+            if "/internships/" in url.lower():
+                try:
+                    cards = page.locator(".individual_internship")
+                    if cards.count() > 0:
+                        detail_link = cards.first.locator("a.job-title-href, h3 a, .profile a").first
+                        if detail_link.is_visible(timeout=2000):
+                            href = detail_link.get_attribute("href")
+                            dest = f"https://internshala.com{href}" if href.startswith("/") else href
+                            safe_log(f"  [Internshala] Opening internship listing: {dest}")
+                            page.goto(dest, wait_until="domcontentloaded", timeout=20000)
+                            page.wait_for_timeout(2500)
+                except Exception as card_err:
+                    safe_log(f"  [Internshala listing err] {card_err}")
+
+            ishala_selectors = [
+                '#easy_apply_button',
+                '#apply_now_cta',
+                'button:has-text("Apply now")',
+                'a:has-text("Apply now")',
+                '.apply_now_button',
+                '.easy_apply_button',
+                'button.btn-primary:has-text("Apply")'
+            ]
+            for is_sel in ishala_selectors:
+                try:
+                    is_loc = page.locator(is_sel).first
+                    if is_loc.is_visible(timeout=1500):
+                        is_text = is_loc.inner_text().strip()
+                        is_loc.click(timeout=2500)
+                        cta_clicked = True
+                        filled_fields.append(f"Internshala CTA clicked: '{is_text}'")
+                        page.wait_for_timeout(2000)
+                        break
+                except Exception:
+                    pass
+
+            # Autofill cover letter if available
+            try:
+                cl_loc = page.locator('#cover_letter, textarea[name="cover_letter"], textarea.cover_letter_text').first
+                if cl_loc.is_visible(timeout=1500):
+                    cover_txt = (
+                        f"Dear Hiring Team,\n\n"
+                        f"I am a B.Tech student (AI & ML, Class of 2028) at {profile['university']} with strong practical skills in "
+                        f"Python, FastAPI, Django, React, Machine Learning, and Transformers. I completed an AI internship at Univitt AI Technologies, "
+                        f"where I developed and optimized scalable backend APIs and automated data pipelines.\n\n"
+                        f"I am immediately available for this remote role and eager to deliver immediate impact.\n\n"
+                        f"Portfolio & GitHub: {profile['github']}\nLinkedIn: {profile['linkedin']}\n\nBest regards,\n{profile['full_name']}"
+                    )
+                    cl_loc.fill(cover_txt, timeout=1500)
+                    filled_fields.append("Filled Internshala tailored cover letter")
+            except Exception:
+                pass
+
+            # Radio: availability Yes
+            try:
+                avail_loc = page.locator("input[type='radio'][value='Yes'], input[type='radio'][value='yes'], input[type='radio'][value='1']").first
+                if avail_loc.is_visible(timeout=1000):
+                    avail_loc.check(timeout=1000)
+                    filled_fields.append("Selected 'Immediate Availability: Yes'")
+            except Exception:
+                pass
+
+            # Custom questions
+            try:
+                text_qs = page.locator("textarea[id^='custom_question_text'], input[id^='custom_question_text']")
+                for i in range(text_qs.count()):
+                    q = text_qs.nth(i)
+                    if q.is_visible(timeout=500) and not q.input_value():
+                        q.fill(
+                            "I have hands-on experience in Python, Machine Learning, REST APIs, and full stack development. "
+                            "I am proactive, adapt quickly, and can commit immediately."
+                        )
+                        filled_fields.append("Answered custom question")
+            except Exception:
+                pass
+
+            # Resume upload if present
+            try:
+                file_input = page.locator("input[type='file']").first
+                if file_input.is_visible(timeout=800):
+                    file_input.set_input_files(resume_path, timeout=2000)
+                    uploaded_resume = True
+                    filled_fields.append(f"Uploaded resume: {resume_name}")
+            except Exception:
+                pass
+
+            # Submit button in modal
+            try:
+                sub_btn = page.locator("#submit, button:has-text('Submit'), input[type='submit'][value*='Submit']").first
+                if sub_btn.is_visible(timeout=1500):
+                    sub_btn.click(timeout=2000)
+                    filled_fields.append("Submitted Internshala application")
+                    page.wait_for_timeout(3000)
+            except Exception:
+                pass
+
+        # Platform Specific Handling: Indeed
+        elif "indeed.com" in url.lower():
+            safe_log("  [Platform: Indeed] Checking Indeed Easy Apply workflow...")
+            indeed_selectors = [
+                '#indeedApplyButton',
+                'button:has-text("Apply now")',
+                '.ia-IndeedApplyButton',
+                'button[id*="applyButton"]',
+                'button:has-text("Easy Apply")'
+            ]
+            for ind_sel in indeed_selectors:
+                try:
+                    ind_loc = page.locator(ind_sel).first
+                    if ind_loc.is_visible(timeout=1500):
+                        ind_text = ind_loc.inner_text().strip()
+                        ind_loc.click(timeout=2500)
+                        cta_clicked = True
+                        filled_fields.append(f"Indeed CTA clicked: '{ind_text}'")
+                        page.wait_for_timeout(2000)
+                        break
+                except Exception:
+                    pass
+
+            # Fill cover note if present
+            try:
+                cov_loc = page.locator("textarea[name*='cover'], textarea[id*='cover'], textarea[aria-label*='over']").first
+                if cov_loc.is_visible(timeout=1000):
+                    cov_note = (
+                        f"I am a B.Tech (2028) student with hands-on Python, ML, and Full Stack skills. "
+                        f"Experienced in building data pipelines and deploying REST APIs. Excited to contribute!"
+                    )
+                    cov_loc.fill(cov_note, timeout=1500)
+                    filled_fields.append("Filled Indeed cover note")
+            except Exception:
+                pass
 
         # Generic Application CTA selectors if not clicked yet
         if not cta_clicked:

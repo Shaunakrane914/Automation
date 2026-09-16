@@ -18,7 +18,8 @@ class DocumentModel(BaseModel):
 
 class AssignmentModel(BaseModel):
     id: Optional[int] = None
-    subject_id: int
+    subject_id: Optional[int] = None
+    subject_name: Optional[str] = None
     title: str
     deadline: Optional[str] = None
     is_lab: int = 0

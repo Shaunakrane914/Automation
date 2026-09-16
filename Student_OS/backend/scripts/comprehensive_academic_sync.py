@@ -158,7 +158,31 @@ async def run_sync():
                     return '0';
                 }''')
                 subject_report["ongoing_count"] = int(ongoing_count_str) if ongoing_count_str.isdigit() else 0
-                print(f"  • Ongoing assignments: {subject_report['ongoing_count']}")
+                print(f"  • Ongoing assignments count: {subject_report['ongoing_count']}")
+
+                # Extract Ongoing Assignments cards if any exist
+                try:
+                    ongoing_text = await page.eval_on_selector(".ant-app, body", "e => e.innerText")
+                    lines = [l.strip() for l in ongoing_text.splitlines() if l.strip()]
+                    ongoing_list = []
+                    for i, l in enumerate(lines):
+                        if any(term in l.lower() for term in ["due date", "submission pending", "due on", "expires"]):
+                            title = lines[i-1] if i > 0 else "Pending Assignment"
+                            if title in ["Ongoing", "Closed", "Assignments", "Classroom"]:
+                                continue
+                            due = ""
+                            for j in range(i, min(i+6, len(lines))):
+                                if "due" in lines[j].lower() and j+1 < len(lines):
+                                    due = lines[j+1]
+                                    break
+                            if title and not any(oa["title"] == title for oa in ongoing_list):
+                                ongoing_list.append({"title": title, "status": "pending", "due_date": due})
+                    if ongoing_list:
+                        subject_report["ongoing_assignments"] = ongoing_list
+                        subject_report["pending_assignments_count"] += len(ongoing_list)
+                        print(f"  • Scraped {len(ongoing_list)} ongoing assignments: {[x['title'] for x in ongoing_list]}")
+                except Exception as oe:
+                    print(f"  Note parsing ongoing assignments: {oe}")
 
                 # Check Closed Assignments
                 try:

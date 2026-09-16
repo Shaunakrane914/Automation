@@ -204,6 +204,107 @@ async def scaffold_lab_endpoint(req: ScaffoldLabRequest):
     })
     return {"status": "success", "lab_path": str(lab_dir)}
 
+# ----------------- Assignments Management Endpoints -----------------
+@app.get("/api/assignments")
+async def get_assignments(status: Optional[str] = None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = """
+    SELECT a.*, s.name as subject_name 
+    FROM assignments a 
+    JOIN subjects s ON a.subject_id = s.id 
+    """
+    params = []
+    if status and status.lower() != "all":
+        query += " WHERE LOWER(a.status) = ?"
+        params.append(status.lower())
+    query += " ORDER BY CASE WHEN LOWER(a.status) = 'pending' THEN 0 ELSE 1 END, a.deadline ASC"
+    cursor.execute(query, params)
+    assignments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return assignments
+
+@app.post("/api/assignments")
+async def create_assignment(asg: AssignmentModel):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    subject_id = asg.subject_id
+    if not subject_id and asg.subject_name:
+        cursor.execute("SELECT id FROM subjects WHERE LOWER(name) = LOWER(?)", (asg.subject_name,))
+        row = cursor.fetchone()
+        if row:
+            subject_id = row["id"]
+        else:
+            cursor.execute("INSERT INTO subjects (name, code, attendance_percentage) VALUES (?, ?, ?)",
+                           (asg.subject_name, "CUSTOM", 100.0))
+            subject_id = cursor.lastrowid
+
+    if not subject_id:
+        cursor.execute("SELECT id FROM subjects LIMIT 1")
+        row = cursor.fetchone()
+        subject_id = row["id"] if row else 1
+
+    cursor.execute("""
+    INSERT INTO assignments (subject_id, title, deadline, is_lab, status, local_lab_dir)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (subject_id, asg.title, asg.deadline or "", asg.is_lab, asg.status or "pending", asg.local_lab_dir or ""))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+
+    log_agent_event("INFO", f"Assignment created: '{asg.title}' (ID: {new_id})")
+    await ws_manager.broadcast({
+        "type": "ASSIGNMENT_CREATED",
+        "id": new_id,
+        "title": asg.title
+    })
+    return {"id": new_id, "status": "created"}
+
+@app.patch("/api/assignments/{assignment_id}/toggle")
+async def toggle_assignment(assignment_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT status, title FROM assignments WHERE id = ?", (assignment_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    current_status = (row["status"] or "").lower()
+    new_status = "completed" if current_status == "pending" else "pending"
+    cursor.execute("UPDATE assignments SET status = ? WHERE id = ?", (new_status, assignment_id))
+    conn.commit()
+    conn.close()
+
+    log_agent_event("INFO", f"Assignment {assignment_id} status toggled to '{new_status}'")
+    await ws_manager.broadcast({
+        "type": "ASSIGNMENT_UPDATED",
+        "id": assignment_id,
+        "status": new_status
+    })
+    return {"id": assignment_id, "status": new_status}
+
+@app.delete("/api/assignments/{assignment_id}")
+async def delete_assignment(assignment_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title FROM assignments WHERE id = ?", (assignment_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    cursor.execute("DELETE FROM assignments WHERE id = ?", (assignment_id,))
+    conn.commit()
+    conn.close()
+
+    log_agent_event("INFO", f"Assignment {assignment_id} deleted")
+    await ws_manager.broadcast({
+        "type": "ASSIGNMENT_DELETED",
+        "id": assignment_id
+    })
+    return {"id": assignment_id, "status": "deleted"}
+
 # ----------------- Labworks & Code Practice Endpoints -----------------
 from app.services.labwork_engine import get_all_labworks, toggle_practice_task, sync_labworks_to_db
 
