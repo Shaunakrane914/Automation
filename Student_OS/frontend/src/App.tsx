@@ -152,20 +152,22 @@ interface ChatMessage {
 }
 
 const QUICK_PROMPTS = [
+  { label: '👋 Say Hi to Copilot', query: "hi" },
+  { label: '💼 Show 7 Verified Applied Jobs', query: "show applied jobs" },
+  { label: '🖥️ Workstation Hardware & GPU Specs', query: "system specs" },
   { label: '⚡ Auto Apply to All Open Opportunities', query: "auto apply to all opportunities" },
   { label: '🔬 Review Deep Learning Lab Code & Practice', query: "Show me my Deep Learning labworks, code breakdown, and practice to-do list." },
   { label: '🔬 Review NLP Text Preprocessing & BoW', query: "Show me my NLP lab practicals and what code I need to practice." },
   { label: '🔬 Review Time Series Decomposition Code', query: "Show me my Time Series lab experiments and moving averages code." },
-  { label: '⚡ Ask Antigravity: Create NLP README', query: "Open Antigravity and ask it to create the README for today's NLP class." },
-  { label: '⚡ Delegate: Train PyTorch Neural Net', query: "Train a PyTorch neural network for transformer attention mechanism" },
   { label: '📊 Check My Attendance & Risk', query: "Check my attendance" },
   { label: '⏳ What Assignments are Pending?', query: "What assignments are pending?" },
   { label: '📂 Open Deep Learning Folder', query: "Open Deep Learning folder" },
   { label: '💻 Run: git status', query: "run git status" },
+  { label: '💻 Run: nvidia-smi', query: "run nvidia-smi" },
   { label: '🔄 Rerun DigiCampus Sync', query: "Rerun full digicampus audit and sync" },
   { label: '🏆 Active Competitions & Hackathons', query: "What new opportunities or hackathons appeared today?" },
   { label: '📌 What Should I Work on Today?', query: "What do I need to do today?" },
-  { label: '💻 Run: python --version', query: "run python --version" },
+  { label: '⚡ Escalate to Antigravity (Explicit Directive)', query: "escalate to antigravity build full neural network architecture" },
 ];
 
 function renderFormattedMarkdown(content: string) {
@@ -240,8 +242,8 @@ export default function App() {
       id: 'welcome',
       sender: 'assistant',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: "⚡ **Student OS Autonomous Copilot & Universal Workstation Controller**\n\nI am your centralized workstation AI with direct PC control, DigiCampus academic auditing, and autonomous self-empowerment via Google Antigravity.\n\n- 💻 **PC Control:** Run commands (`run git status`, `run python ...`), launch apps (`open vs code`, `open deep learning`).\n- 📊 **Academic Engine:** Live attendance breakdown, assignment deadlines, local course folders.\n- ⚡ **Antigravity Power Protocol:** If you ask me to perform a complex task, build new code, train models, or if I cannot do it with local tools, I will write a custom directive in your style (`USER_PROFILE.md`), copy it to clipboard, and open Google Antigravity (`Antigravity.exe`) to empower the workstation and perform the task!",
-      tool_used: 'identity_overview'
+      text: "⚡ **Student OS Autonomous Copilot & Ultimate Workstation Controller**\n\nI am your live workstation AI powered by **Ollama (local RTX 3050 GPU) + Gemini (cloud)** with direct PC control, terminal execution, DigiCampus auditing, and verified Career Radar tracking.\n\n- 🧠 **Dual-Brain AI:** Local GPU generation via Ollama (`qwen2.5:0.5b`) & Gemini cloud for zero-latency, private reasoning.\n- 💻 **PC & Shell Execution:** Run terminal commands (`run git status`, `run dir`, `run nvidia-smi`), inspect hardware (`system specs`).\n- 🚀 **App Launcher:** Open VS Code, Terminal, Chrome, or any of your 12 academic folders (`open deep learning`, `open time series`).\n- 📊 **Academic & Career:** Real-time attendance breakdown, DigiCampus sync, and 7 verified applications on LinkedIn, Internshala, and Indeed.\n- ⚡ **Antigravity Protocol:** ONLY when you explicitly command Antigravity delegation (`escalate to antigravity`), I formulate a high-leverage directive and launch Antigravity IDE.\n\nType `hi`, `system specs`, or `show applied jobs` to test live execution!",
+      tool_used: 'workstation_greeting'
     }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -879,6 +881,16 @@ export default function App() {
                         <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
                           msg.tool_used === 'delegate_to_antigravity'
                             ? 'bg-amber-950/80 text-amber-300 border border-amber-800/80 font-semibold'
+                            : msg.tool_used === 'ollama_gpu_llm'
+                            ? 'bg-purple-950/80 text-purple-300 border border-purple-800/80 font-semibold'
+                            : msg.tool_used === 'gemini_cloud_llm'
+                            ? 'bg-sky-950/80 text-sky-300 border border-sky-800/80 font-semibold'
+                            : msg.tool_used === 'workstation_greeting'
+                            ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 font-semibold'
+                            : msg.tool_used === 'system_telemetry'
+                            ? 'bg-teal-950/80 text-teal-300 border border-teal-800/80 font-semibold'
+                            : msg.tool_used === 'applied_applications'
+                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 font-semibold'
                             : msg.tool_used === 'execute_command'
                             ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
                             : msg.tool_used === 'open_application'
@@ -2167,7 +2179,16 @@ export default function App() {
                     <span>•</span>
                     <span>{msg.timestamp}</span>
                     {msg.tool_used && (
-                      <span className="text-blue-400 font-mono text-[9px]">[{msg.tool_used}]</span>
+                      <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded uppercase ${
+                        msg.tool_used === 'delegate_to_antigravity' ? 'bg-amber-950/80 text-amber-300 border border-amber-800/80 font-semibold'
+                        : msg.tool_used === 'ollama_gpu_llm' ? 'bg-purple-950/80 text-purple-300 border border-purple-800/80 font-semibold'
+                        : msg.tool_used === 'workstation_greeting' ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/80'
+                        : msg.tool_used === 'applied_applications' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
+                        : msg.tool_used === 'system_telemetry' ? 'bg-teal-950/80 text-teal-300 border border-teal-800/80'
+                        : 'bg-zinc-800 text-zinc-300'
+                      }`}>
+                        [{msg.tool_used}]
+                      </span>
                     )}
                   </div>
                   <div
@@ -2257,7 +2278,7 @@ export default function App() {
       {/* Visual Proof Screenshot Modal */}
       {activeScreenshotModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl max-w-4xl w-full min-h-[500px] max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
             <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
               <div className="flex items-center space-x-2">
                 <Eye className="h-4 w-4 text-emerald-400" />

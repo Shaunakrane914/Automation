@@ -10,7 +10,8 @@ logger = logging.getLogger("desktop_automation")
 ALLOWED_COMMAND_PREFIXES = [
     "python", "py", "pytest", "git", "dir", "ls", "node", "npm", "npx",
     "code", "echo", "cat", "pip", "tasklist", "curl", "where", "whoami",
-    "ipconfig", "powershell", "type", "ver", "systeminfo", "findstr", "head", "tail"
+    "ipconfig", "powershell", "type", "ver", "systeminfo", "findstr", "head", "tail",
+    "nvidia-smi", "ollama", "wmic", "hostname", "ping", "netstat", "tree"
 ]
 
 DANGEROUS_PATTERNS = [
@@ -49,7 +50,7 @@ def execute_desktop_command(command: str, working_dir: Optional[str] = None) -> 
     Executes an approved CLI command safely on the host system.
     """
     if not is_safe_command(command):
-        msg = f"Command '{command}' blocked by safety policy. Only development and system inspection commands are permitted."
+        msg = f"Command '{command}' blocked by safety policy. Permitted prefixes: {', '.join(ALLOWED_COMMAND_PREFIXES[:12])}..."
         log_agent_event("WARNING", msg)
         return {"success": False, "error": msg, "output": ""}
 
@@ -83,7 +84,7 @@ def execute_desktop_command(command: str, working_dir: Optional[str] = None) -> 
 
 def launch_application(app_name: str, target_path: Optional[str] = None) -> Dict[str, Any]:
     """
-    Spawns local applications such as VS Code, Terminal, Explorer, or Antigravity.
+    Spawns local applications such as VS Code, Terminal, Explorer, Chrome, Notepad, or Antigravity.
     """
     try:
         path_arg = f'"{target_path}"' if target_path else ""
@@ -95,6 +96,12 @@ def launch_application(app_name: str, target_path: Optional[str] = None) -> Dict
             cmd = f"start powershell -NoExit -Command \"cd '{target_path or os.getcwd()}'\""
         elif app_clean in ["explorer", "folder"]:
             cmd = f"explorer \"{target_path or os.getcwd()}\""
+        elif app_clean in ["chrome", "browser"]:
+            cmd = f"start chrome {path_arg}" if target_path else "start chrome"
+        elif app_clean in ["notepad", "notes"]:
+            cmd = f"notepad {path_arg}" if target_path else "notepad"
+        elif app_clean in ["calc", "calculator"]:
+            cmd = "calc"
         elif app_clean in ["antigravity", "agy"]:
             antigravity_exe = r"C:\Users\Shaunak Rane\AppData\Local\Programs\Antigravity\Antigravity.exe"
             if Path(antigravity_exe).exists():
