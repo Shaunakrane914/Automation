@@ -22,7 +22,16 @@ import {
   FileText,
   Layers,
   ShieldCheck,
-  Server
+  Server,
+  Bot,
+  Sparkles,
+  Zap,
+  Send,
+  Copy,
+  Check,
+  X,
+  Maximize2,
+  RotateCcw
 } from 'lucide-react';
 
 interface Subject {
@@ -92,13 +101,95 @@ interface AgentLog {
   message: string;
 }
 
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  timestamp: string;
+  text: string;
+  tool_used?: string;
+  details?: any;
+}
+
+const QUICK_PROMPTS = [
+  { label: '⚡ Ask Antigravity: Create NLP README', query: "Open Antigravity and ask it to create the README for today's NLP class." },
+  { label: '⚡ Delegate: Train PyTorch Neural Net', query: "Train a PyTorch neural network for transformer attention mechanism" },
+  { label: '📊 Check My Attendance & Risk', query: "Check my attendance" },
+  { label: '⏳ What Assignments are Pending?', query: "What assignments are pending?" },
+  { label: '📂 Open Deep Learning Folder', query: "Open Deep Learning folder" },
+  { label: '💻 Run: git status', query: "run git status" },
+  { label: '🔄 Rerun DigiCampus Sync', query: "Rerun full digicampus audit and sync" },
+  { label: '🏆 Active Competitions & Hackathons', query: "What new opportunities or hackathons appeared today?" },
+  { label: '📌 What Should I Work on Today?', query: "What do I need to do today?" },
+  { label: '💻 Run: python --version', query: "run python --version" },
+];
+
+function renderFormattedMarkdown(content: string) {
+  const parts = content.split(/(```[\s\S]*?```)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('```') && part.endsWith('```')) {
+      const lines = part.slice(3, -3).trim().split('\n');
+      const lang = lines[0].trim();
+      const codeText = lang && !lines[0].includes(' ') ? lines.slice(1).join('\n') : lines.join('\n');
+      return (
+        <div key={index} className="my-2 rounded-md bg-zinc-950 p-3 font-mono text-[11px] text-zinc-300 border border-zinc-800 overflow-x-auto">
+          <pre className="whitespace-pre">{codeText}</pre>
+        </div>
+      );
+    }
+    return (
+      <span key={index}>
+        {part.split('\n').map((line, lIdx) => {
+          let lineContent = line;
+          const isQuote = line.startsWith('> ');
+          if (isQuote) lineContent = line.slice(2);
+          const isBullet = line.startsWith('- ') || line.startsWith('* ');
+          if (isBullet) lineContent = line.slice(2);
+
+          return (
+            <div
+              key={lIdx}
+              className={`${isQuote ? 'border-l-2 border-amber-500/80 pl-2.5 my-1 text-zinc-300 italic' : ''} ${
+                isBullet ? 'flex items-start space-x-1.5 ml-2' : ''
+              }`}
+            >
+              {isBullet && <span className="text-zinc-500 font-bold">•</span>}
+              <span dangerouslySetInnerHTML={{
+                __html: lineContent
+                  .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+                  .replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-[10px]">$1</code>')
+              }} />
+            </div>
+          );
+        })}
+      </span>
+    );
+  });
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'academic' | 'resources' | 'career' | 'desktop' | 'todos' | 'logs'>('academic');
+  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'resources' | 'career' | 'desktop' | 'todos' | 'logs'>('copilot');
   const [wsConnected, setWsConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; subject: string } | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Live Synced (Sept 2026)');
+
+  // Chat Copilot states
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      sender: 'assistant',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: "⚡ **Student OS Autonomous Copilot & Universal Workstation Controller**\n\nI am your centralized workstation AI with direct PC control, DigiCampus academic auditing, and autonomous self-empowerment via Google Antigravity.\n\n- 💻 **PC Control:** Run commands (`run git status`, `run python ...`), launch apps (`open vs code`, `open deep learning`).\n- 📊 **Academic Engine:** Live attendance breakdown, assignment deadlines, local course folders.\n- ⚡ **Antigravity Power Protocol:** If you ask me to perform a complex task, build new code, train models, or if I cannot do it with local tools, I will write a custom directive in your style (`USER_PROFILE.md`), copy it to clipboard, and open Google Antigravity (`Antigravity.exe`) to empower the workstation and perform the task!",
+      tool_used: 'identity_overview'
+    }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [copilotDrawerOpen, setCopilotDrawerOpen] = useState(false);
+  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
+  const chatContainerRef = React.useRef<HTMLDivElement>(null);
+  const chatDrawerContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Data states
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -316,6 +407,66 @@ export default function App() {
     }
   };
 
+  const sendChatMessage = async (customQuery?: string, forceAntigravity: boolean = false) => {
+    const q = (customQuery !== undefined ? customQuery : chatInput).trim();
+    if (!q || chatLoading) return;
+
+    const finalQuery = forceAntigravity && !q.toLowerCase().includes('antigravity')
+      ? `Ask Antigravity to: ${q}`
+      : q;
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: finalQuery
+    };
+
+    setChatMessages((prev) => [...prev, userMsg]);
+    if (!customQuery) setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await axios.post('/api/chat', { query: finalQuery });
+      const assistantMsg: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: res.data.response || 'Action processed.',
+        tool_used: res.data.tool_used,
+        details: res.data.details
+      };
+      setChatMessages((prev) => [...prev, assistantMsg]);
+      fetchLogs();
+    } catch (err: any) {
+      const errorMsg: ChatMessage = {
+        id: `error-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `⚠️ **Execution Error:** ${err.response?.data?.detail || err.message}`,
+        tool_used: 'error'
+      };
+      setChatMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedPromptId(id);
+    setTimeout(() => setCopiedPromptId(null), 2500);
+  };
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+    if (chatDrawerContainerRef.current) {
+      chatDrawerContainerRef.current.scrollTop = chatDrawerContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages, chatLoading]);
+
   const filteredDocuments = selectedSubjectFilter === 'ALL'
     ? documents
     : documents.filter(d => d.subject_name === selectedSubjectFilter);
@@ -381,6 +532,7 @@ export default function App() {
         {/* Tab Navigation */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 overflow-x-auto border-t border-zinc-800">
           {[
+            { id: 'copilot', label: 'AI Copilot & Antigravity', icon: Bot, isSpecial: true },
             { id: 'academic', label: 'Classroom & Academics', icon: GraduationCap },
             { id: 'resources', label: 'Course Materials & Files', icon: FolderCheck },
             { id: 'career', label: 'Career & Opportunities', icon: Briefcase },
@@ -400,8 +552,13 @@ export default function App() {
                     : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className={`h-3.5 w-3.5 ${tab.isSpecial ? 'text-amber-400 animate-pulse' : ''}`} />
                 <span>{tab.label}</span>
+                {tab.isSpecial && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
+                    ⚡ ULTIMATE
+                  </span>
+                )}
               </button>
             );
           })}
@@ -435,6 +592,252 @@ export default function App() {
 
       {/* Main Workspace Area */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+        {/* TAB 0: AUTONOMOUS COPILOT & ANTIGRAVITY */}
+        {activeTab === 'copilot' && (
+          <div className="space-y-6">
+            {/* Top Copilot Capability Banner */}
+            <div className="p-5 rounded-xl bg-gradient-to-r from-zinc-900 via-zinc-900 to-blue-950/40 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2.5">
+                  <div className="h-8 w-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                    <Bot className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-white tracking-tight flex items-center space-x-2">
+                      <span>Student OS Ultimate Autonomous Copilot</span>
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                        PC Control & Antigravity Bridge
+                      </span>
+                    </h2>
+                    <p className="text-xs text-zinc-400">
+                      Orchestrating desktop CLI, local subject files, DigiCampus sync, and autonomous Google Antigravity delegation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status pills */}
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                <span className="px-2.5 py-1 rounded bg-zinc-800/80 text-zinc-300 border border-zinc-700 flex items-center space-x-1.5">
+                  <Terminal className="h-3 w-3 text-emerald-400" />
+                  <span>CLI Shell: Active</span>
+                </span>
+                <span className="px-2.5 py-1 rounded bg-zinc-800/80 text-zinc-300 border border-zinc-700 flex items-center space-x-1.5">
+                  <Zap className="h-3 w-3 text-amber-400" />
+                  <span>Antigravity Bridge: Online</span>
+                </span>
+                <button
+                  onClick={() => setChatMessages([chatMessages[0]])}
+                  className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700 transition flex items-center space-x-1"
+                  title="Clear chat history"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span>Reset</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Action Suggestion Pills */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
+                <span className="flex items-center space-x-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Quick Workstation Directives & Queries:</span>
+                </span>
+                <span className="text-[11px] font-mono text-zinc-500">1-click execution</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_PROMPTS.map((p, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => sendChatMessage(p.query)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white transition flex items-center space-x-1.5"
+                  >
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Main Chat Stream Box */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 backdrop-blur flex flex-col h-[580px]">
+              {/* Messages Container */}
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 font-sans text-xs">
+                {chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                  >
+                    {/* Message Header */}
+                    <div className="flex items-center space-x-2 mb-1 text-[11px] text-zinc-500 font-mono">
+                      <span>{msg.sender === 'user' ? 'User Workstation' : 'Autonomous Copilot'}</span>
+                      <span>•</span>
+                      <span>{msg.timestamp}</span>
+                      {msg.tool_used && (
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
+                          msg.tool_used === 'delegate_to_antigravity'
+                            ? 'bg-amber-950/80 text-amber-300 border border-amber-800/80 font-semibold'
+                            : msg.tool_used === 'execute_command'
+                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
+                            : msg.tool_used === 'open_application'
+                            ? 'bg-blue-950/80 text-blue-300 border border-blue-800/80'
+                            : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                        }`}>
+                          [TOOL: {msg.tool_used}]
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Message Body */}
+                    <div
+                      className={`max-w-[85%] rounded-xl p-4 leading-relaxed ${
+                        msg.sender === 'user'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-zinc-900 border border-zinc-800 text-zinc-200'
+                      }`}
+                    >
+                      {/* Markdown formatted text */}
+                      <div className="whitespace-pre-wrap font-sans text-xs space-y-1">
+                        {renderFormattedMarkdown(msg.text)}
+                      </div>
+
+                      {/* Antigravity Delegation Card */}
+                      {msg.tool_used === 'delegate_to_antigravity' && msg.details && (
+                        <div className="mt-3.5 p-3.5 rounded-lg bg-amber-950/30 border border-amber-500/40 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2 text-amber-300 font-semibold text-xs">
+                              <Zap className="h-4 w-4 animate-pulse text-amber-400" />
+                              <span>Google Antigravity Directive Bridge</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-900/60 text-amber-200 border border-amber-700/60">
+                              {msg.details.launched ? 'Launched in IDE' : 'Ready'}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] font-mono text-zinc-300 space-y-1 bg-zinc-950/70 p-2.5 rounded border border-zinc-800">
+                            <div><span className="text-zinc-500">File:</span> {msg.details.prompt_file}</div>
+                            <div><span className="text-zinc-500">Status:</span> {msg.details.message}</div>
+                            <div><span className="text-zinc-500">Clipboard:</span> {msg.details.clipboard_copied ? 'Copied to clipboard' : 'Available for manual copy'}</div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <button
+                              onClick={() => copyToClipboard(msg.details?.prompt_preview || '', msg.id)}
+                              className="px-2.5 py-1.5 rounded text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition flex items-center space-x-1.5"
+                            >
+                              {copiedPromptId === msg.id ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                  <span className="text-emerald-300">Prompt Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5 text-zinc-400" />
+                                  <span>Copy Directive</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => launchApp('antigravity', msg.details?.prompt_file)}
+                              className="px-2.5 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-500 text-white transition flex items-center space-x-1.5 shadow-sm"
+                            >
+                              <Play className="h-3.5 w-3.5" />
+                              <span>Re-Open in Antigravity</span>
+                            </button>
+
+                            <button
+                              onClick={() => launchApp('explorer', 'Student_OS/backend/data/antigravity_prompts')}
+                              className="px-2.5 py-1.5 rounded text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition flex items-center space-x-1.5"
+                            >
+                              <Folder className="h-3.5 w-3.5 text-zinc-400" />
+                              <span>Open Prompts Folder</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Desktop Command Execution Details */}
+                      {msg.tool_used === 'execute_command' && msg.details && (
+                        <div className="mt-2.5 flex items-center justify-between text-[11px] font-mono text-zinc-400 bg-zinc-950/60 px-3 py-1.5 rounded border border-zinc-800">
+                          <span>Exit Code: {msg.details.success ? '0 (Success)' : 'Non-zero'}</span>
+                          <button
+                            onClick={() => copyToClipboard(msg.details?.result || '', msg.id)}
+                            className="hover:text-white flex items-center space-x-1 text-zinc-400"
+                          >
+                            <Copy className="h-3 w-3" />
+                            <span>Copy Output</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Loading indicator */}
+                {chatLoading && (
+                  <div className="flex items-center space-x-2 text-xs font-mono text-blue-400 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 max-w-md animate-pulse">
+                    <RefreshCw className="h-4 w-4 animate-spin flex-shrink-0" />
+                    <span>Autonomous Copilot is orchestrating system tools & executing...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Bar */}
+              <div className="p-3 sm:p-4 border-t border-zinc-800 bg-zinc-900/90 rounded-b-xl">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendChatMessage();
+                  }}
+                  className="flex flex-col sm:flex-row gap-2"
+                >
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Ask anything, control PC (e.g., 'run git status', 'check attendance', or 'train a neural net')..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition font-sans pr-10"
+                    />
+                    {chatInput && (
+                      <button
+                        type="button"
+                        onClick={() => setChatInput('')}
+                        className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="submit"
+                      disabled={chatLoading || !chatInput.trim()}
+                      className="px-4 py-2.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition flex items-center space-x-1.5 border border-blue-500 shadow-sm disabled:opacity-50"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Execute</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={chatLoading || !chatInput.trim()}
+                      onClick={() => sendChatMessage(undefined, true)}
+                      className="px-3.5 py-2.5 rounded-lg text-xs font-semibold text-amber-200 bg-amber-950/70 hover:bg-amber-900/80 transition flex items-center space-x-1.5 border border-amber-700/80 shadow-sm disabled:opacity-50"
+                      title="Force generation of an Antigravity directive and launch Antigravity IDE"
+                    >
+                      <Zap className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Escalate to Antigravity</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 1: ACADEMIC & CLASSROOM */}
         {activeTab === 'academic' && (
           <div className="space-y-6">
@@ -1028,6 +1431,167 @@ export default function App() {
       <footer className="border-t border-zinc-800 py-3 text-center text-xs text-zinc-500 font-mono">
         Student OS • Universal AI University Workstation Environment
       </footer>
+
+      {/* Floating Copilot Trigger Button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => setCopilotDrawerOpen(true)}
+          className="flex items-center space-x-2.5 px-4 py-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-xl shadow-blue-950/60 border border-blue-400/40 transition transform hover:scale-105 active:scale-95 cursor-pointer"
+          title="Open Autonomous Copilot Drawer"
+        >
+          <Bot className="h-4 w-4" />
+          <span className="font-semibold">AI Copilot</span>
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+        </button>
+      </div>
+
+      {/* Slide-over Copilot Drawer */}
+      {copilotDrawerOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-zinc-900 border-l border-zinc-800 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-200">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/90">
+              <div className="flex items-center space-x-2.5">
+                <div className="h-8 w-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Student OS Copilot</h3>
+                  <p className="text-[11px] text-zinc-400">PC Control & Antigravity Bridge</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => {
+                    setActiveTab('copilot');
+                    setCopilotDrawerOpen(false);
+                  }}
+                  className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  title="Expand to Full Tab"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setCopilotDrawerOpen(false)}
+                  className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  title="Close Drawer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Chips inside Drawer */}
+            <div className="px-4 py-2 border-b border-zinc-800/80 bg-zinc-950/40 flex overflow-x-auto space-x-1.5 text-[11px]">
+              {QUICK_PROMPTS.slice(0, 5).map((p, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => sendChatMessage(p.query)}
+                  className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 whitespace-nowrap text-[10px] transition"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Drawer Messages Stream */}
+            <div ref={chatDrawerContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 font-sans text-xs">
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                >
+                  <div className="flex items-center space-x-1.5 mb-1 text-[10px] text-zinc-500 font-mono">
+                    <span>{msg.sender === 'user' ? 'User' : 'Copilot'}</span>
+                    <span>•</span>
+                    <span>{msg.timestamp}</span>
+                    {msg.tool_used && (
+                      <span className="text-blue-400 font-mono text-[9px]">[{msg.tool_used}]</span>
+                    )}
+                  </div>
+                  <div
+                    className={`max-w-[90%] rounded-xl p-3 text-xs leading-relaxed ${
+                      msg.sender === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-zinc-950 border border-zinc-800 text-zinc-200'
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap">{renderFormattedMarkdown(msg.text)}</div>
+                    {msg.tool_used === 'delegate_to_antigravity' && msg.details && (
+                      <div className="mt-2 p-2 rounded bg-amber-950/30 border border-amber-600/40 text-[11px] space-y-1.5">
+                        <div className="flex items-center space-x-1 text-amber-300 font-semibold">
+                          <Zap className="h-3.5 w-3.5" />
+                          <span>Antigravity Directive Generated</span>
+                        </div>
+                        <div className="flex gap-1.5 pt-1">
+                          <button
+                            onClick={() => copyToClipboard(msg.details?.prompt_preview || '', msg.id)}
+                            className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] flex items-center space-x-1"
+                          >
+                            <Copy className="h-3 w-3" />
+                            <span>Copy</span>
+                          </button>
+                          <button
+                            onClick={() => launchApp('antigravity', msg.details?.prompt_file)}
+                            className="px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white text-[10px] flex items-center space-x-1"
+                          >
+                            <Play className="h-3 w-3" />
+                            <span>Launch</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex items-center space-x-2 text-xs font-mono text-blue-400 bg-zinc-950 border border-zinc-800 rounded p-2.5 animate-pulse">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>Processing workstation command...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Drawer Input */}
+            <div className="p-3 border-t border-zinc-800 bg-zinc-900">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  sendChatMessage();
+                }}
+                className="flex flex-col gap-2"
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Command PC or ask Antigravity..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-sans"
+                />
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => sendChatMessage(undefined, true)}
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="px-2.5 py-1.5 rounded text-[11px] font-medium text-amber-300 bg-amber-950/60 hover:bg-amber-900 border border-amber-800 flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <Zap className="h-3 w-3" />
+                    <span>Antigravity</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="px-3 py-1.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <Send className="h-3 w-3" />
+                    <span>Send</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

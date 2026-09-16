@@ -8,11 +8,20 @@ from app.database import log_agent_event
 logger = logging.getLogger("desktop_automation")
 
 ALLOWED_COMMAND_PREFIXES = [
-    "python", "py", "pytest", "git", "dir", "ls", "node", "npm", "code", "echo", "cat"
+    "python", "py", "pytest", "git", "dir", "ls", "node", "npm", "npx",
+    "code", "echo", "cat", "pip", "tasklist", "curl", "where", "whoami",
+    "ipconfig", "powershell", "type", "ver", "systeminfo", "findstr", "head", "tail"
+]
+
+DANGEROUS_PATTERNS = [
+    "rm -rf", "del /s", "del /f", "format ", "rmdir /s", "drop table", "shutdown", ">nul 2>&1"
 ]
 
 def is_safe_command(command: str) -> bool:
     cmd_clean = command.strip().lower()
+    for pattern in DANGEROUS_PATTERNS:
+        if pattern in cmd_clean:
+            return False
     for prefix in ALLOWED_COMMAND_PREFIXES:
         if cmd_clean.startswith(prefix):
             return True
@@ -23,7 +32,7 @@ def execute_desktop_command(command: str, working_dir: Optional[str] = None) -> 
     Executes an approved CLI command safely on the host system.
     """
     if not is_safe_command(command):
-        msg = f"Command '{command}' is not in the approved safe list."
+        msg = f"Command '{command}' blocked by safety policy. Only development and system inspection commands are permitted."
         log_agent_event("WARNING", msg)
         return {"success": False, "error": msg, "output": ""}
 
@@ -39,12 +48,12 @@ def execute_desktop_command(command: str, working_dir: Optional[str] = None) -> 
             text=True,
             timeout=30
         )
-        output = process.stdout if process.returncode == 0 else process.stderr
+        output = process.stdout if process.returncode == 0 else (process.stderr or process.stdout)
         success = process.returncode == 0
         return {
             "success": success,
             "exit_code": process.returncode,
-            "output": output
+            "output": output or "Command completed successfully."
         }
     except subprocess.TimeoutExpired:
         msg = f"Command timed out after 30s: {command}"
@@ -57,16 +66,24 @@ def execute_desktop_command(command: str, working_dir: Optional[str] = None) -> 
 
 def launch_application(app_name: str, target_path: Optional[str] = None) -> Dict[str, Any]:
     """
-    Spawns local applications such as VS Code, Terminal, or Antigravity.
+    Spawns local applications such as VS Code, Terminal, Explorer, or Antigravity.
     """
     try:
         path_arg = f'"{target_path}"' if target_path else ""
-        if app_name.lower() in ["code", "vscode"]:
+        app_clean = app_name.lower().strip()
+
+        if app_clean in ["code", "vscode"]:
             cmd = f"code {path_arg}"
-        elif app_name.lower() in ["terminal", "cmd", "powershell"]:
+        elif app_clean in ["terminal", "cmd", "powershell"]:
             cmd = f"start powershell -NoExit -Command \"cd '{target_path or os.getcwd()}'\""
-        elif app_name.lower() in ["explorer", "folder"]:
+        elif app_clean in ["explorer", "folder"]:
             cmd = f"explorer \"{target_path or os.getcwd()}\""
+        elif app_clean in ["antigravity", "agy"]:
+            antigravity_exe = r"C:\Users\Shaunak Rane\AppData\Local\Programs\Antigravity\Antigravity.exe"
+            if Path(antigravity_exe).exists():
+                cmd = f'"{antigravity_exe}" {path_arg}'
+            else:
+                cmd = f"start antigravity {path_arg}"
         else:
             cmd = f"{app_name} {path_arg}"
 
