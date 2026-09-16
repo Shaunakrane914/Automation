@@ -281,6 +281,56 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         except Exception as e:
             return {"response": f"⚠️ Auto-apply pipeline error: {e}", "tool_used": "auto_apply_pipeline"}
 
+    # 1.8 Autonomous Labworks & Code Practice Engine
+    if any(k in ql for k in [
+        "labwork", "lab work", "lab practical", "practicals", "practice code",
+        "code to practice", "to do list", "todo list for lab", "all labs",
+        "deep learning lab", "nlp lab", "time series lab", "bda lab", "java lab", "web tech lab"
+    ]):
+        from app.services.labwork_engine import get_all_labworks
+        data = get_all_labworks()
+        stats = data["stats"]
+        subjects = data["subjects"]
+        
+        target_subject = None
+        for s in subjects:
+            s_low = s["subject_name"].lower()
+            if (("deep learning" in ql or "neural" in ql) and "deep learning" in s_low) or \
+               (("nlp" in ql or "natural language" in ql) and ("nlp" in s_low or "natural language" in s_low)) or \
+               (("time series" in ql or "forecasting" in ql) and "time series" in s_low) or \
+               (("big data" in ql or "bda" in ql) and "big data" in s_low) or \
+               (("java" in ql or "ajp" in ql) and "java" in s_low) or \
+               (("web" in ql or "awt" in ql or "react" in ql) and "web" in s_low):
+                target_subject = s
+                break
+        
+        if target_subject:
+            reply = f"🔬 **{target_subject['subject_name']} — Labworks & Code Practice Roadmap**\n\n"
+            reply += f"Discovered **{len(target_subject['labworks'])} experiments** with scraped code architectures:\n\n"
+            for lw in target_subject["labworks"]:
+                status_icon = "✅" if lw["status"] == "completed" else ("⚡" if lw["status"] == "in_progress" else "⏳")
+                reply += f"### {status_icon} [{lw['lab_number']}] {lw['title']}\n"
+                reply += f"- **Problem:** {lw['problem_statement']}\n"
+                reply += f"- **Key Concepts:** {', '.join(lw['concepts'])}\n"
+                reply += f"- **File Path:** `{lw['file_path']}`\n"
+                reply += f"- **Hands-On Practice Checklist:**\n"
+                for t in lw["practice_todos"]:
+                    done = "☑️" if t["id"] in lw["completed_tasks"] else "⬜"
+                    reply += f"  {done} **[{t['category']}]** {t['task']}\n"
+                reply += "\n"
+            reply += f"\n💡 *You can track and check off each step interactively in the **Labworks & Code Practice** tab!*"
+            return {"response": reply, "tool_used": "labwork_roadmap", "data": target_subject}
+        else:
+            reply = f"🔬 **Autonomous Labworks & Code Practice Engine — All Lab Subjects**\n\n"
+            reply += f"- **Total Lab Experiments Discovered:** {stats['total_labs']}\n"
+            reply += f"- **Hands-On Code Practice Tasks:** {stats['total_tasks']}\n"
+            reply += f"- **Completed Tasks:** {stats['completed_tasks']} ({stats['overall_readiness_pct']}% Practical Readiness)\n\n"
+            reply += "### 📚 Lab Subjects Breakdown:\n"
+            for s in subjects:
+                reply += f"- **{s['subject_name']}**: {s['total_labs']} experiments\n"
+            reply += f"\n👉 Switch to the **Labworks & Code Practice** tab to inspect syntax-highlighted starter code, launch lab folders in VS Code, and check off practice to-dos."
+            return {"response": reply, "tool_used": "labwork_roadmap", "data": data}
+
     # 2. Antigravity Delegation / Complex Code Creation Triggers
     antigravity_triggers = [
         "antigravity", "power to", "give it power", "ask antigravity", "delegate",

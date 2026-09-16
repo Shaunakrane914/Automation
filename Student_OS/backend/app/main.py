@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException
@@ -203,6 +203,51 @@ async def scaffold_lab_endpoint(req: ScaffoldLabRequest):
         "path": str(lab_dir)
     })
     return {"status": "success", "lab_path": str(lab_dir)}
+
+# ----------------- Labworks & Code Practice Endpoints -----------------
+from app.services.labwork_engine import get_all_labworks, toggle_practice_task, sync_labworks_to_db
+
+@app.get("/api/labs")
+async def get_labs_endpoint(subject_id: Optional[int] = None):
+    return get_all_labworks(subject_id=subject_id)
+
+@app.post("/api/labs/todo/toggle")
+async def toggle_lab_todo_endpoint(payload: Dict[str, Any]):
+    labwork_id = payload.get("labwork_id")
+    task_id = payload.get("task_id")
+    if not labwork_id or not task_id:
+        raise HTTPException(status_code=400, detail="labwork_id and task_id are required")
+    try:
+        res = toggle_practice_task(int(labwork_id), str(task_id))
+        await ws_manager.broadcast({"type": "LAB_TASK_TOGGLED", "labwork_id": labwork_id, "task_id": task_id})
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/labs/rescan")
+async def rescan_labs_endpoint():
+    res = sync_labworks_to_db(force_rescan=True)
+    await ws_manager.broadcast({"type": "LABS_RESCANNED"})
+    return res
+
+@app.post("/api/labs/open")
+async def open_lab_file_endpoint(payload: Dict[str, str]):
+    path_str = payload.get("path", "")
+    target = Path(path_str)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Target path does not exist")
+    import os
+    import subprocess
+    try:
+        if os.name == 'nt':
+            if target.is_dir():
+                os.startfile(str(target))
+            else:
+                # Open directory in explorer with file selected, or open file
+                subprocess.Popen(["explorer", f"/select,{str(target)}"])
+        return {"status": "opened", "path": str(target)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ----------------- Career Radar Endpoints -----------------
 @app.get("/api/career/radar")

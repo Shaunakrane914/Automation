@@ -32,8 +32,46 @@ import {
   X,
   Maximize2,
   RotateCcw,
-  Eye
+  Eye,
+  FlaskConical,
+  FolderOpen,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
+
+interface PracticeTodo {
+  id: string;
+  task: string;
+  category: string;
+}
+
+interface Labwork {
+  id: number;
+  subject_id: number;
+  subject_name: string;
+  lab_number: string;
+  title: string;
+  file_path: string;
+  code_type: string;
+  concepts: string[];
+  problem_statement: string;
+  code_summary: string;
+  practice_todos: PracticeTodo[];
+  starter_code: string;
+  status: 'ready' | 'in_progress' | 'completed';
+  completed_tasks: string[];
+  tasks_count: number;
+  completed_count: number;
+  progress_pct: number;
+}
+
+interface LabSubjectGroup {
+  subject_name: string;
+  subject_id: number;
+  labworks: Labwork[];
+  total_labs: number;
+  completed_labs: number;
+}
 
 interface Subject {
   id: number;
@@ -115,6 +153,9 @@ interface ChatMessage {
 
 const QUICK_PROMPTS = [
   { label: '⚡ Auto Apply to All Open Opportunities', query: "auto apply to all opportunities" },
+  { label: '🔬 Review Deep Learning Lab Code & Practice', query: "Show me my Deep Learning labworks, code breakdown, and practice to-do list." },
+  { label: '🔬 Review NLP Text Preprocessing & BoW', query: "Show me my NLP lab practicals and what code I need to practice." },
+  { label: '🔬 Review Time Series Decomposition Code', query: "Show me my Time Series lab experiments and moving averages code." },
   { label: '⚡ Ask Antigravity: Create NLP README', query: "Open Antigravity and ask it to create the README for today's NLP class." },
   { label: '⚡ Delegate: Train PyTorch Neural Net', query: "Train a PyTorch neural network for transformer attention mechanism" },
   { label: '📊 Check My Attendance & Risk', query: "Check my attendance" },
@@ -171,12 +212,27 @@ function renderFormattedMarkdown(content: string) {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'resources' | 'career' | 'desktop' | 'todos' | 'logs'>('copilot');
+  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'labs' | 'resources' | 'career' | 'desktop' | 'todos' | 'logs'>('copilot');
   const [wsConnected, setWsConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; subject: string } | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Live Synced (Sept 2026)');
+
+  // Labworks states
+  const [labworks, setLabworks] = useState<Labwork[]>([]);
+  const [labSubjects, setLabSubjects] = useState<LabSubjectGroup[]>([]);
+  const [labStats, setLabStats] = useState<{
+    total_labs: number;
+    total_tasks: number;
+    completed_tasks: number;
+    pending_tasks: number;
+    overall_readiness_pct: number;
+  }>({ total_labs: 0, total_tasks: 0, completed_tasks: 0, pending_tasks: 0, overall_readiness_pct: 0 });
+  const [selectedLabSubject, setSelectedLabSubject] = useState<string>('ALL');
+  const [rescanLabsLoading, setRescanLabsLoading] = useState<boolean>(false);
+  const [expandedCodeIds, setExpandedCodeIds] = useState<Record<number, boolean>>({});
+  const [copiedCodeId, setCopiedCodeId] = useState<number | null>(null);
 
   // Chat Copilot states
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -264,6 +320,9 @@ export default function App() {
           } else if (data.type === 'LAB_SCAFFOLDED') {
             fetchAcademicData();
             fetchLogs();
+          } else if (data.type === 'LAB_TASK_TOGGLED' || data.type === 'LABS_RESCANNED') {
+            fetchLabworks();
+            fetchAcademicData();
           } else if (data.type === 'AUTO_APPLY_PROGRESS') {
             setAutoApplyRunning(true);
             setAutoApplyStatusMsg(`Applying to ${data.opportunity} (${data.current}/${data.total})...`);
@@ -294,11 +353,91 @@ export default function App() {
   // Fetch initial data
   useEffect(() => {
     fetchAcademicData();
+    fetchLabworks();
     fetchCareerData();
     fetchTodos();
     fetchLogs();
     fetchAutoApplyStatus();
   }, []);
+
+  const fetchLabworks = async () => {
+    try {
+      const res = await axios.get('/api/labs');
+      if (res.data) {
+        setLabworks(res.data.labworks || []);
+        setLabSubjects(res.data.subjects || []);
+        if (res.data.stats) {
+          setLabStats(res.data.stats);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching labworks:', e);
+    }
+  };
+
+  const handleToggleLabTask = async (labworkId: number, taskId: string) => {
+    // Optimistically update local state
+    setLabworks(prev => prev.map(lw => {
+      if (lw.id === labworkId) {
+        const isCompleted = lw.completed_tasks.includes(taskId);
+        const newCompleted = isCompleted
+          ? lw.completed_tasks.filter(t => t !== taskId)
+          : [...lw.completed_tasks, taskId];
+        const newPct = Math.round((newCompleted.length / (lw.practice_todos.length || 1)) * 100);
+        const newStatus: 'ready' | 'in_progress' | 'completed' =
+          newCompleted.length === lw.practice_todos.length && lw.practice_todos.length > 0
+            ? 'completed'
+            : (newCompleted.length > 0 ? 'in_progress' : 'ready');
+        return {
+          ...lw,
+          completed_tasks: newCompleted,
+          completed_count: newCompleted.length,
+          progress_pct: newPct,
+          status: newStatus
+        };
+      }
+      return lw;
+    }));
+
+    try {
+      await axios.post('/api/labs/todo/toggle', { labwork_id: labworkId, task_id: taskId });
+      fetchLabworks();
+    } catch (e) {
+      console.error('Error toggling lab task:', e);
+      fetchLabworks();
+    }
+  };
+
+  const handleRescanLabs = async () => {
+    setRescanLabsLoading(true);
+    try {
+      await axios.post('/api/labs/rescan');
+      await fetchLabworks();
+      await fetchAcademicData();
+    } catch (e) {
+      console.error('Error rescanning labworks:', e);
+    } finally {
+      setRescanLabsLoading(false);
+    }
+  };
+
+  const handleOpenLabFile = async (filePath: string) => {
+    try {
+      await axios.post('/api/labs/open', { path: filePath });
+    } catch (e) {
+      console.error('Error opening lab file:', e);
+    }
+  };
+
+  const toggleCodeExpand = (labId: number) => {
+    setExpandedCodeIds(prev => ({ ...prev, [labId]: !prev[labId] }));
+  };
+
+  const copyCodeSnippet = (code: string, labId: number) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCodeId(labId);
+    setTimeout(() => setCopiedCodeId(null), 2500);
+  };
 
   const fetchAcademicData = async () => {
     try {
@@ -591,6 +730,7 @@ export default function App() {
           {[
             { id: 'copilot', label: 'AI Copilot & Antigravity', icon: Bot, isSpecial: true },
             { id: 'academic', label: 'Classroom & Academics', icon: GraduationCap },
+            { id: 'labs', label: 'Labworks & Code Practice', icon: FlaskConical, badge: labworks.length },
             { id: 'resources', label: 'Course Materials & Files', icon: FolderCheck },
             { id: 'career', label: 'Career & Opportunities', icon: Briefcase },
             { id: 'desktop', label: 'Desktop Terminal', icon: Terminal },
@@ -611,6 +751,11 @@ export default function App() {
               >
                 <Icon className={`h-3.5 w-3.5 ${tab.isSpecial ? 'text-amber-400 animate-pulse' : ''}`} />
                 <span>{tab.label}</span>
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-blue-900/60 text-blue-300 border border-blue-700/60 font-semibold">
+                    {tab.badge}
+                  </span>
+                )}
                 {tab.isSpecial && (
                   <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
                     ⚡ ULTIMATE
@@ -1122,6 +1267,363 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: LABWORKS & CODE PRACTICE ROADMAPS */}
+        {activeTab === 'labs' && (
+          <div className="space-y-6">
+            {/* Header Banner */}
+            <div className="p-5 rounded-xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-blue-950/30 backdrop-blur shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start space-x-3.5">
+                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mt-0.5">
+                  <FlaskConical className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-base font-bold text-white tracking-tight">
+                      Autonomous Labworks Scraper & Code Practice Roadmaps
+                    </h2>
+                    <span className="px-2 py-0.5 text-[10px] font-mono rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      Live Indexed
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-3xl">
+                    Autonomous engine that scrapes assignments, drive resources, and Jupyter/code files from{' '}
+                    <code className="text-zinc-200 font-mono bg-zinc-800 px-1 py-0.5 rounded">Desktop\3rd Year</code>,
+                    understands neural network architectures, pipelines, and algorithms, and generates step-by-step
+                    practice to-do checklists for hands-on learning.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 self-stretch md:self-auto flex-shrink-0">
+                <button
+                  onClick={handleRescanLabs}
+                  disabled={rescanLabsLoading}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition flex items-center space-x-2 shadow-sm disabled:opacity-50"
+                  title="Rescan 3rd Year directory and update code practice checklists"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${rescanLabsLoading ? 'animate-spin' : ''}`} />
+                  <span>{rescanLabsLoading ? 'Rescanning Code...' : 'Rescan Labs & Code'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Metrics Overview */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                <div className="text-[11px] font-mono text-zinc-400 uppercase">Total Labworks</div>
+                <div className="text-xl font-bold text-white mt-1">{labStats.total_labs} Experiments</div>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Across 6 Academic Lab Subjects</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                <div className="text-[11px] font-mono text-zinc-400 uppercase">Practice Tasks Mastered</div>
+                <div className="text-xl font-bold text-emerald-400 mt-1">
+                  {labStats.completed_tasks} / {labStats.total_tasks}
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-0.5">{labStats.pending_tasks} Tasks Pending Practice</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                <div className="text-[11px] font-mono text-zinc-400 uppercase">Practical Readiness</div>
+                <div className="text-xl font-bold text-blue-400 mt-1">{labStats.overall_readiness_pct}%</div>
+                <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-1.5">
+                  <div
+                    className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${labStats.overall_readiness_pct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                <div className="text-[11px] font-mono text-zinc-400 uppercase">Code Repositories</div>
+                <div className="text-xl font-bold text-purple-400 mt-1">6 Active</div>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Jupyter, Python, Java, TypeScript</p>
+              </div>
+            </div>
+
+            {/* Subject Selector Filter Tabs */}
+            <div className="flex items-center space-x-2 overflow-x-auto pb-1 text-xs">
+              <span className="text-zinc-500 font-medium whitespace-nowrap mr-1">Subject Filter:</span>
+              <button
+                onClick={() => setSelectedLabSubject('ALL')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap flex items-center space-x-1.5 ${
+                  selectedLabSubject === 'ALL'
+                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <span>All Subjects</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-950/60 font-mono">
+                  {labworks.length}
+                </span>
+              </button>
+
+              {labSubjects.map((sub) => {
+                const isSelected = selectedLabSubject === sub.subject_name;
+                return (
+                  <button
+                    key={sub.subject_name}
+                    onClick={() => setSelectedLabSubject(sub.subject_name)}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap flex items-center space-x-1.5 ${
+                      isSelected
+                        ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <span>{sub.subject_name.replace(' (Neural Network)', '').replace(' Modelling & Forecasting', '')}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-950/60 font-mono">
+                      {sub.total_labs}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Labworks List */}
+            <div className="space-y-4">
+              {labworks
+                .filter((lw) => selectedLabSubject === 'ALL' || lw.subject_name === selectedLabSubject)
+                .map((lw) => {
+                  const isExpanded = !!expandedCodeIds[lw.id];
+                  const isCopied = copiedCodeId === lw.id;
+
+                  // Dynamic subject badge colors
+                  const sName = lw.subject_name.toLowerCase();
+                  const badgeStyle = sName.includes('deep learning')
+                    ? 'bg-purple-950/70 text-purple-300 border-purple-800/60'
+                    : sName.includes('natural language') || sName.includes('nlp')
+                    ? 'bg-cyan-950/70 text-cyan-300 border-cyan-800/60'
+                    : sName.includes('time series')
+                    ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60'
+                    : sName.includes('big data')
+                    ? 'bg-amber-950/70 text-amber-300 border-amber-800/60'
+                    : sName.includes('java')
+                    ? 'bg-orange-950/70 text-orange-300 border-orange-800/60'
+                    : 'bg-blue-950/70 text-blue-300 border-blue-800/60';
+
+                  return (
+                    <div
+                      key={lw.id}
+                      className="rounded-xl border border-zinc-800 bg-zinc-900/60 backdrop-blur overflow-hidden hover:border-zinc-700 transition"
+                    >
+                      {/* Top Card Bar */}
+                      <div className="p-4 sm:p-5 border-b border-zinc-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase font-semibold border ${badgeStyle}`}>
+                              {lw.subject_name}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700">
+                              {lw.lab_number}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-zinc-900 text-zinc-400 border border-zinc-800">
+                              {lw.code_type}
+                            </span>
+                          </div>
+                          <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                            {lw.title}
+                          </h3>
+                          <div className="flex items-center space-x-2 text-xs text-zinc-400 font-mono">
+                            <FolderOpen className="h-3 w-3 text-zinc-500" />
+                            <span className="truncate max-w-md">{lw.file_path}</span>
+                          </div>
+                        </div>
+
+                        {/* Status and Progress Info */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-shrink-0">
+                          <div className="text-right sm:text-right">
+                            <div className="flex items-center justify-end space-x-2">
+                              {lw.status === 'completed' ? (
+                                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800 flex items-center space-x-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                  <span>Mastered</span>
+                                </span>
+                              ) : lw.status === 'in_progress' ? (
+                                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800 flex items-center space-x-1">
+                                  <Clock className="h-3.5 w-3.5 text-amber-400" />
+                                  <span>In Progress</span>
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700 flex items-center space-x-1">
+                                  <Circle className="h-3 w-3 text-zinc-500" />
+                                  <span>Ready to Practice</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-mono text-zinc-400 mt-1">
+                              {lw.completed_count} of {lw.tasks_count} Tasks ({lw.progress_pct}%)
+                            </div>
+                            <div className="w-32 bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-1 ml-auto">
+                              <div
+                                className={`h-full transition-all duration-300 rounded-full ${
+                                  lw.status === 'completed'
+                                    ? 'bg-emerald-500'
+                                    : lw.status === 'in_progress'
+                                    ? 'bg-amber-500'
+                                    : 'bg-zinc-600'
+                                }`}
+                                style={{ width: `${lw.progress_pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-4 sm:p-5 space-y-4 text-xs">
+                        {/* Problem Statement */}
+                        <div className="p-3 rounded-lg bg-zinc-950/70 border border-zinc-800 text-zinc-300 leading-relaxed">
+                          <span className="font-semibold text-zinc-100 mr-1.5">Objective & Problem:</span>
+                          <span>{lw.problem_statement}</span>
+                        </div>
+
+                        {/* Concept Badges */}
+                        <div>
+                          <div className="text-[11px] font-mono text-zinc-400 uppercase mb-1.5">Core Architecture & Concepts:</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {lw.concepts.map((concept, cIdx) => (
+                              <span
+                                key={cIdx}
+                                className="px-2.5 py-1 rounded text-[11px] bg-zinc-800/70 text-zinc-200 border border-zinc-700/80 font-mono"
+                              >
+                                {concept}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Interactive Practice To-Do Checklist */}
+                        <div className="pt-2 border-t border-zinc-800/80">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-zinc-200 flex items-center space-x-1.5 text-xs">
+                              <CheckSquare className="h-3.5 w-3.5 text-blue-400" />
+                              <span>Shaunak's Hands-on Practice To-Do Checklist:</span>
+                            </span>
+                            <span className="text-[11px] font-mono text-zinc-500">
+                              Click task checkbox to track mastering code
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {lw.practice_todos.map((todo) => {
+                              const isDone = lw.completed_tasks.includes(todo.id);
+                              return (
+                                <div
+                                  key={todo.id}
+                                  onClick={() => handleToggleLabTask(lw.id, todo.id)}
+                                  className={`p-2.5 rounded-lg border transition flex items-start space-x-3 cursor-pointer select-none ${
+                                    isDone
+                                      ? 'bg-emerald-950/20 border-emerald-900/50 hover:bg-emerald-950/30'
+                                      : 'bg-zinc-950/50 border-zinc-800/80 hover:bg-zinc-800/40 hover:border-zinc-700'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    className="mt-0.5 flex-shrink-0 text-zinc-400 hover:text-white transition"
+                                  >
+                                    {isDone ? (
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                    ) : (
+                                      <Circle className="h-4 w-4 text-zinc-600 hover:text-zinc-400" />
+                                    )}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center space-x-2">
+                                      <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                                        isDone
+                                          ? 'bg-emerald-900/40 text-emerald-300'
+                                          : 'bg-zinc-800 text-zinc-400'
+                                      }`}>
+                                        {todo.category}
+                                      </span>
+                                      <span
+                                        className={`leading-snug text-xs ${
+                                          isDone ? 'line-through text-zinc-400' : 'text-zinc-200'
+                                        }`}
+                                      >
+                                        {todo.task}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Code Toggle & Launcher Bar */}
+                        <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+                          <button
+                            onClick={() => toggleCodeExpand(lw.id)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition flex items-center space-x-1.5 border border-zinc-700"
+                          >
+                            <Code2 className="h-3.5 w-3.5 text-blue-400" />
+                            <span>{isExpanded ? 'Hide Starter Code' : 'Inspect Code & Starter Implementation'}</span>
+                            {isExpanded ? (
+                              <ChevronUp className="h-3 w-3 text-zinc-400" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3 text-zinc-400" />
+                            )}
+                          </button>
+
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleOpenLabFile(lw.file_path)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 bg-zinc-900 hover:bg-zinc-800 transition flex items-center space-x-1.5 border border-zinc-800 hover:border-zinc-700"
+                              title="Reveal file in File Explorer"
+                            >
+                              <FolderOpen className="h-3.5 w-3.5 text-zinc-400" />
+                              <span>Reveal in Explorer</span>
+                            </button>
+
+                            <button
+                              onClick={() => launchApp('code', lw.file_path)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium text-blue-300 bg-blue-950/60 hover:bg-blue-900/70 transition flex items-center space-x-1.5 border border-blue-800/60"
+                              title="Launch directly in VS Code"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5 text-blue-400" />
+                              <span>Open in VS Code</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded Code Box */}
+                        {isExpanded && (
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden mt-3">
+                            <div className="px-3 py-2 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between text-xs">
+                              <span className="font-mono text-[11px] text-zinc-400">
+                                {lw.file_path.split('\\').pop() || 'implementation'}
+                              </span>
+                              <button
+                                onClick={() => copyCodeSnippet(lw.starter_code, lw.id)}
+                                className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition flex items-center space-x-1 font-mono text-[11px]"
+                              >
+                                {isCopied ? (
+                                  <>
+                                    <Check className="h-3 w-3 text-emerald-400" />
+                                    <span className="text-emerald-400">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-3 w-3 text-zinc-400" />
+                                    <span>Copy Code</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                            <div className="p-4 overflow-x-auto max-h-96 font-mono text-[11px] text-zinc-300 leading-relaxed">
+                              <pre className="whitespace-pre">{lw.starter_code}</pre>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}

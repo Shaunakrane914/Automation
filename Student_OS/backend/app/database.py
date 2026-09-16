@@ -91,6 +91,28 @@ def init_db():
     );
     """)
 
+    # 7. Labworks and Code Practice table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS labworks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subject_id INTEGER NOT NULL,
+        subject_name TEXT NOT NULL,
+        lab_number TEXT,
+        title TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        code_type TEXT NOT NULL,
+        concepts TEXT,
+        problem_statement TEXT,
+        code_summary TEXT,
+        practice_todos TEXT,
+        starter_code TEXT,
+        status TEXT DEFAULT 'ready',
+        completed_tasks TEXT DEFAULT '[]',
+        created_at TEXT,
+        FOREIGN KEY (subject_id) REFERENCES subjects (id)
+    );
+    """)
+
     conn.commit()
 
     # Pre-seed initial career radar from verified 16 Sept 2026 data if empty
