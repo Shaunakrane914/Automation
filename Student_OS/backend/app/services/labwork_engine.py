@@ -799,6 +799,150 @@ public class DBConnect {
 }"""
         },
 
+        {
+            "mapping_key": "ajp",
+            "lab_number": "Exp 4",
+            "title": "Desktop GUI Forms & Multi-Document Interface (Swing & NetBeans Form)",
+            "file_rel_path": "AJP/StudentMDI.class",
+            "code_type": "java",
+            "concepts": ["Java Swing GUI", "JFrame & JInternalFrame", "MDI (Multiple Document Interface)", "Event Handling (ActionListener)", "Form Validation"],
+            "problem_statement": "Develop an interactive Swing desktop GUI application featuring a master MDI container (StudentMDI), modal student registration dialogs, search forms, and event-driven data binding.",
+            "code_summary": "Implements StudentMDI desktop pane hosting child JInternalFrames (Registration, SearchStudent). Attaches ActionListeners to trigger JDBC queries and dynamic record displays.",
+            "practice_todos": [
+                {"id": "ajp4-1", "task": "Create JDesktopPane container within a parent JFrame.", "category": "MDI Layout"},
+                {"id": "ajp4-2", "task": "Design JInternalFrame registration form with JTextField and JComboBox.", "category": "GUI Form"},
+                {"id": "ajp4-3", "task": "Bind ActionListener to Submit button to collect and validate input fields.", "category": "Event Handling"},
+                {"id": "ajp4-4", "task": "Pass form inputs to DBConnect PreparedStatement for database insertion.", "category": "DB Integration"},
+                {"id": "ajp4-5", "task": "Implement SearchStudent lookup frame updating dynamic status labels.", "category": "Form Interaction"}
+            ],
+            "starter_code": """package ajp;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+
+public class StudentMDI extends JFrame {
+    private JDesktopPane desktopPane;
+
+    public StudentMDI() {
+        setTitle("Student Information Management System - MDI");
+        setSize(800, 600);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        desktopPane = new JDesktopPane();
+        setContentPane(desktopPane);
+
+        // Menu bar setup
+        JMenuBar menuBar = new JMenuBar();
+        JMenu studentMenu = new JMenu("Student Operations");
+        JMenuItem regItem = new JMenuItem("New Registration");
+        JMenuItem searchItem = new JMenuItem("Search Student");
+
+        regItem.addActionListener((ActionEvent e) -> openRegistrationFrame());
+        searchItem.addActionListener((ActionEvent e) -> openSearchFrame());
+
+        studentMenu.add(regItem);
+        studentMenu.add(searchItem);
+        menuBar.add(studentMenu);
+        setJMenuBar(menuBar);
+    }
+
+    private void openRegistrationFrame() {
+        JInternalFrame frame = new JInternalFrame("Register Student", true, true, true, true);
+        frame.setSize(350, 250);
+        frame.setLayout(new GridLayout(4, 2, 10, 10));
+        frame.add(new JLabel("  Student Name:"));
+        JTextField nameField = new JTextField();
+        frame.add(nameField);
+        JButton btnSave = new JButton("Save Record");
+        frame.add(btnSave);
+        frame.setVisible(true);
+        desktopPane.add(frame);
+    }
+
+    private void openSearchFrame() {
+        JInternalFrame frame = new JInternalFrame("Search Record", true, true, true, true);
+        frame.setSize(300, 200);
+        frame.setVisible(true);
+        desktopPane.add(frame);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new StudentMDI().setVisible(true));
+    }
+}"""
+        },
+        {
+            "mapping_key": "ajp",
+            "lab_number": "Exp 5",
+            "title": "Java Servlets: Web Application Request-Response Lifecycle & HTTP Handling",
+            "file_rel_path": "AJP/AJP_MidTerm_Question_Bank.pdf",
+            "code_type": "java",
+            "concepts": ["Java Servlet API", "HttpServlet", "doGet() & doPost()", "Servlet Lifecycle (init, service, destroy)", "RequestDispatcher & Session Tracking"],
+            "problem_statement": "Build server-side Java web components using Servlets. Handle client HTTP GET and POST requests, process query parameters, maintain user state via HttpSession, and dispatch responses.",
+            "code_summary": "Implements StudentServlet extending HttpServlet with @WebServlet mapping. Processes parameters in doGet and doPost, performs session management, and forwards responses to JSP views.",
+            "practice_todos": [
+                {"id": "ajp5-1", "task": "Extend HttpServlet and override doGet(HttpServletRequest, HttpServletResponse) and doPost().", "category": "Servlet API"},
+                {"id": "ajp5-2", "task": "Configure servlet mapping using @WebServlet('/student') annotation or web.xml deployment descriptor.", "category": "Routing"},
+                {"id": "ajp5-3", "task": "Extract form submission parameters using request.getParameter('studentId').", "category": "Request Processing"},
+                {"id": "ajp5-4", "task": "Store and retrieve session attributes using request.getSession().setAttribute('user', user).", "category": "Session Management"},
+                {"id": "ajp5-5", "task": "Forward processed request to view via RequestDispatcher.forward(request, response).", "category": "Dispatching"}
+            ],
+            "starter_code": """package ajp;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+@WebServlet("/student")
+public class StudentServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void init() throws ServletException {
+        System.out.println("Servlet Initialized: init() lifecycle stage");
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+        PrintWriter out = response.getWriter();
+
+        String studentId = request.getParameter("id");
+        HttpSession session = request.getSession(true);
+        session.setAttribute("lastAccessedId", studentId);
+
+        out.println("<html><body>");
+        out.println("<h2>Advance Java Lab - Student Servlet Response</h2>");
+        out.println("<p>Queried Student ID: <strong>" + studentId + "</strong></p>");
+        out.println("<p>Session ID: " + session.getId() + "</p>");
+        out.println("</body></html>");
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        String studentName = request.getParameter("name");
+        String course = request.getParameter("course");
+
+        // Process student registration logic (e.g. invoke DBConnect)
+        System.out.println("Registering via Servlet POST: " + studentName + " in " + course);
+
+        response.sendRedirect("student?status=success");
+    }
+
+    @Override
+    public void destroy() {
+        System.out.println("Servlet Destroyed: clean up database pools");
+    }
+}"""
+        },
         # -------------------------------------------------------------
         # 6. Advanced Web Technology Lab
         # -------------------------------------------------------------

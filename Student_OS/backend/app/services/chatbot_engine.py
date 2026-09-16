@@ -589,52 +589,150 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         return {"response": "\n".join(lines), "tool_used": "academic_status", "details": res}
 
     # 9b. Assignments & Coursework Submissions
-    if any(k in ql for k in ["assignment", "assignments", "homework", "pending work", "submissions", "pending task"]):
+    if any(k in ql for k in ["assignment", "assignments", "homework", "pending work", "submissions", "pending task", "coursework"]):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
         SELECT a.id, a.title, a.deadline, a.status, s.name as subject_name, a.is_lab
         FROM assignments a
         JOIN subjects s ON a.subject_id = s.id
-        WHERE LOWER(a.status) = 'pending'
         ORDER BY a.deadline ASC
         """)
-        pending_asgs = [dict(r) for r in cursor.fetchall()]
+        all_asgs = [dict(r) for r in cursor.fetchall()]
         conn.close()
 
-        if not pending_asgs:
-            return {
-                "response": "🎉 **Zero Pending Assignments!**\n\nAll classroom assignments and lab experiments are currently caught up and marked complete. No action required.",
-                "tool_used": "assignments_status",
-                "details": {"pending_count": 0}
-            }
+        ongoing_asgs = [a for a in all_asgs if (a.get("status") or "").lower() in ["pending", "open"]]
+        submitted_asgs = [a for a in all_asgs if (a.get("status") or "").lower() in ["submitted"]]
+        closed_asgs = [a for a in all_asgs if (a.get("status") or "").lower() in ["closed", "not submitted"]]
+        completed_labs = [a for a in all_asgs if (a.get("status") or "").lower() in ["completed"]]
 
-        lines = [
-            f"⏳ **Pending Assignments & Coursework ({len(pending_asgs)} Action Required)**\n",
-            "Here are your active pending assignments tracked dynamically in SQLite:\n"
-        ]
+        lines = ["📊 **DigiCampus & Academic Coursework Status**\n"]
 
-        # Group by subject
-        by_subject = {}
-        for a in pending_asgs:
-            sname = a["subject_name"].split("[")[0].strip()
-            by_subject.setdefault(sname, []).append(a)
+        # 1. Ongoing / Action Required
+        if ongoing_asgs:
+            lines.append(f"### ⏳ Ongoing Submissions ({len(ongoing_asgs)} Action Required)")
+            for a in ongoing_asgs:
+                sname = a["subject_name"].split("[")[0].strip()
+                due_str = f"Due: `{a['deadline']}`" if a.get('deadline') else "Upcoming"
+                lines.append(f"- **{a['title']}** (`{sname}` • {due_str})")
+            lines.append("")
+        else:
+            lines.append("### 🟢 Ongoing Submissions: `0 Active` (All caught up!)\nThere are currently no active open assignments requiring submission on DigiCampus.\n")
 
-        for sname, items in by_subject.items():
-            lines.append(f"### 📘 {sname} ({len(items)} Pending)")
-            for item in items:
-                due_str = f"Due: `{item['deadline']}`" if item['deadline'] else "No fixed deadline"
-                lab_tag = "🔬 Lab" if item.get('is_lab') else "📝 Assignment"
-                lines.append(f"- **{item['title']}** ({lab_tag} • {due_str})")
+        # 2. Submitted Work
+        if submitted_asgs:
+            lines.append(f"### ✅ Submitted Coursework ({len(submitted_asgs)})")
+            for a in submitted_asgs:
+                sname = a["subject_name"].split("[")[0].strip()
+                lines.append(f"- **{a['title']}** (`{sname}` • Status: `Submitted`)")
             lines.append("")
 
-        lines.append("💡 *Tip: You can toggle any assignment to completed or scaffold starter code directly from the Classroom tab in your dashboard.*")
+        # 3. Closed (Past Due)
+        if closed_asgs:
+            lines.append(f"### 🔒 Closed Assignments ({len(closed_asgs)} Past Deadline)")
+            for a in closed_asgs:
+                sname = a["subject_name"].split("[")[0].strip()
+                due_str = f"Deadline was: `{a['deadline'][:10]}`" if a.get('deadline') else "Past"
+                lines.append(f"- **{a['title']}** (`{sname}` • {due_str} • `Closed`)")
+            lines.append("")
+
+        # 4. Labworks
+        lines.append(f"### 🔬 Local Labworks: **{len(completed_labs)} Experiments Completed** in `Desktop/3rd Year`")
+        lines.append("\n💡 *Tip: Check the Classroom & Academics tab for full course audit details or to manually add newly announced tasks.*")
 
         return {
             "response": "\n".join(lines),
             "tool_used": "assignments_status",
-            "details": {"pending_count": len(pending_asgs), "assignments": pending_asgs}
+            "details": {
+                "ongoing_count": len(ongoing_asgs),
+                "submitted_count": len(submitted_asgs),
+                "closed_count": len(closed_asgs),
+                "completed_labs_count": len(completed_labs)
+            }
         }
+
+    # 9c. Labworks, Practicals & Code Practice To-Dos
+    lab_keywords = ["labwork", "labworks", "practical", "practicals", "lab todo", "practice todo", "lab work", "labs", "experiments", "experiment", "servlet", "lab ", "lab1", "lab2", "lab3", "lab4", "lab5"]
+    if any(k in ql for k in lab_keywords) and not any(k in ql for k in ["assignment", "assignments", "homework"]):
+        target_subj = None
+        if any(k in ql for k in ["advance java", "java", "ajp", "servlet", "jdbc", "swing", "mdi"]):
+            target_subj = "Advance Java"
+        elif any(k in ql for k in ["deep learning", "dl", "neural network", "perceptron", "mlp"]):
+            target_subj = "Deep Learning"
+        elif any(k in ql for k in ["nlp", "natural language", "bow", "tfidf", "n-gram", "sentiment"]):
+            target_subj = "Natural Language"
+        elif any(k in ql for k in ["time series", "arima", "moving average", "decomposition"]):
+            target_subj = "Time Series"
+        elif any(k in ql for k in ["bda", "big data", "structured", "netflix", "amazon"]):
+            target_subj = "Big Data"
+        elif any(k in ql for k in ["awt", "typescript", "react", "overloading"]):
+            target_subj = "Advanced Web"
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if target_subj:
+            cursor.execute("""
+            SELECT l.id, l.lab_number, l.title, l.file_path, l.concepts, l.problem_statement, l.practice_todos, s.name as subject_name
+            FROM labworks l
+            JOIN subjects s ON l.subject_id = s.id
+            WHERE s.name LIKE ?
+            ORDER BY l.id ASC
+            """, (f"%{target_subj}%",))
+        else:
+            cursor.execute("""
+            SELECT l.id, l.lab_number, l.title, l.file_path, l.concepts, l.problem_statement, l.practice_todos, s.name as subject_name
+            FROM labworks l
+            JOIN subjects s ON l.subject_id = s.id
+            ORDER BY l.subject_id ASC, l.id ASC
+            """)
+        labs = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+
+        if labs:
+            subj_title = target_subj if target_subj else "3rd Year Curriculum"
+            lines = [f"🔬 **DigiCampus & Workstation Labworks: {subj_title} ({len(labs)} Experiments)**\n"]
+            lines.append("Here is the complete verified list of lab practicals from DigiCampus and your `Desktop/3rd Year` workspace, along with your structured practice to-do checklist:\n")
+
+            all_todos = []
+            for l in labs:
+                sname = l["subject_name"].split("[")[0].strip()
+                lines.append(f"### {l['lab_number']}: {l['title']}")
+                lines.append(f"- **Course:** `{sname}`")
+                if l.get("file_path"):
+                    lines.append(f"- **Local File:** `{Path(l['file_path']).name}`")
+                if l.get("problem_statement"):
+                    lines.append(f"- **Objective:** {l['problem_statement']}")
+                
+                # Parse practice todos
+                todos_raw = l.get("practice_todos")
+                if todos_raw:
+                    try:
+                        todos_list = json.loads(todos_raw) if isinstance(todos_raw, str) else todos_raw
+                        if isinstance(todos_list, list) and todos_list:
+                            lines.append("- **Practice Tasks:**")
+                            for t in todos_list:
+                                task_text = t.get("task", "") if isinstance(t, dict) else str(t)
+                                cat = t.get("category", "") if isinstance(t, dict) else ""
+                                badge = f" `[{cat}]`" if cat else ""
+                                lines.append(f"  - [ ] {task_text}{badge}")
+                                all_todos.append(f"{l['lab_number']} ({cat}): {task_text}")
+                    except Exception:
+                        pass
+                lines.append("")
+
+            lines.append("### 📋 Practice To-Do Action Items:")
+            for i, todo in enumerate(all_todos[:12], 1):
+                lines.append(f"{i}. {todo}")
+            if len(all_todos) > 12:
+                lines.append(f"... and {len(all_todos) - 12} more practice tasks available in the Labworks & Code Practice tab.")
+
+            lines.append("\n💡 *You can also view full starter code, test suites, and toggle completed tasks in the **Labworks & Code Practice** tab.*")
+
+            return {
+                "response": "\n".join(lines),
+                "tool_used": "labworks_curriculum_inspector",
+                "details": {"subject": target_subj, "labs_count": len(labs), "total_todos": len(all_todos)}
+            }
 
     # 10. Multi-Step Query / ReAct Agent Trigger
     if any(k in ql for k in ["and then", "and list", "check if", "find and", "search and", "if there is"]):
@@ -646,8 +744,10 @@ def process_chat_query(query: str) -> Dict[str, Any]:
     rag_context = get_academic_rag_context(q, top_k=3)
 
     system_prompt = (
-        "You are Shaunak Rane's Academic & Engineering Copilot at Universal AI University (B.Tech CS AI & ML). "
-        "Provide direct, concise, mathematically precise, well-structured markdown answers. "
+        "You are Shaunak Rane's Student OS Autonomous Workstation Copilot at Universal AI University (B.Tech CS AI & ML). "
+        "You have direct access to Shaunak's 3rd year coursework, local files in Desktop/3rd Year, and DigiCampus academic records. "
+        "NEVER identify as an external third-party AI or state that you lack access to coursework materials. "
+        "Provide direct, authoritative, concise, mathematically precise, and structured answers grounded in Shaunak's engineering curriculum. "
         f"{rag_context}"
     )
 
