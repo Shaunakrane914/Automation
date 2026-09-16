@@ -249,7 +249,7 @@
     "local_folder_name": "Time Series",
     "local_folder_path": "c:\\Users\\Shaunak Rane\\Desktop\\3rd Year\\Time Series",
     "local_folder_exists": true,
-    "local_files_count": 152,
+    "local_files_count": 153,
     "local_files": [
       "1_datetime.ipynb",
       "2_pandas_datetime.ipynb",
@@ -259,6 +259,7 @@
       "demo.ipynb",
       "Exp1.ipynb",
       "Multiplicative_Composition.ipynb",
+      "LD2011_2014.txt",
       "sales_data.csv",
       "sales_data_with_nulls.csv",
       "upi_transactions.csv",
@@ -955,7 +956,7 @@
     "local_folder_name": "Time Series",
     "local_folder_path": "c:\\Users\\Shaunak Rane\\Desktop\\3rd Year\\Time Series",
     "local_folder_exists": true,
-    "local_files_count": 152,
+    "local_files_count": 153,
     "local_files": [
       "1_datetime.ipynb",
       "2_pandas_datetime.ipynb",
@@ -965,6 +966,7 @@
       "demo.ipynb",
       "Exp1.ipynb",
       "Multiplicative_Composition.ipynb",
+      "LD2011_2014.txt",
       "sales_data.csv",
       "sales_data_with_nulls.csv",
       "upi_transactions.csv",

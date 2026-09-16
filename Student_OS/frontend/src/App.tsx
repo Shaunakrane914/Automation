@@ -680,20 +680,36 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2 text-xs">
-                <span className="text-zinc-500 font-medium">Filter Subject:</span>
-                <select
-                  value={selectedSubjectFilter}
-                  onChange={(e) => setSelectedSubjectFilter(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-700"
+              <div className="flex items-center space-x-3 text-xs">
+                <button
+                  onClick={triggerSync}
+                  disabled={syncing}
+                  className="px-3 py-1.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition flex items-center space-x-1.5 border border-blue-500 shadow-sm disabled:opacity-50"
+                  title="Rerun complete DigiCampus crawler and file audit"
                 >
-                  <option value="ALL">All Subjects ({documents.length} files)</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                  <span>
+                    {syncing
+                      ? (syncProgress ? `Auditing (${syncProgress.current}/${syncProgress.total})...` : 'Syncing...')
+                      : 'Rerun Full Update'}
+                  </span>
+                </button>
+
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-zinc-500 font-medium">Filter:</span>
+                  <select
+                    value={selectedSubjectFilter}
+                    onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-zinc-200 focus:outline-none focus:border-zinc-700"
+                  >
+                    <option value="ALL">All Subjects ({documents.length} files)</option>
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
