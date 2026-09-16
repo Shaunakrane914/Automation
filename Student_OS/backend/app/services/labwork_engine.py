@@ -987,6 +987,8 @@ def sync_labworks_to_db(force_rescan: bool = False) -> Dict[str, Any]:
         # Also ensure assignment entry exists in assignments table
         cursor.execute("SELECT id FROM assignments WHERE title = ?", (f"[{lab_number}] {title}",))
         if not cursor.fetchone():
+            file_exists = Path(full_file_path).exists()
+            asg_status = "completed" if (status == "completed" or file_exists) else "pending"
             cursor.execute("""
             INSERT INTO assignments (subject_id, title, deadline, is_lab, status, local_lab_dir)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -995,7 +997,7 @@ def sync_labworks_to_db(force_rescan: bool = False) -> Dict[str, Any]:
                 f"[{lab_number}] {title}",
                 "2026-09-30 23:59:00",
                 1,
-                "completed" if status == "completed" else "pending",
+                asg_status,
                 str(Path(full_file_path).parent)
             ))
 
