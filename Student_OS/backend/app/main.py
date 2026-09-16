@@ -1,3 +1,4 @@
+import sys
 import asyncio
 import json
 import logging
@@ -13,13 +14,16 @@ from app.config import settings
 from app.database import init_db, get_db_connection, log_agent_event
 from app.models import (
     SubjectModel, AssignmentModel, CareerRadarModel, DailyTodoModel,
-    DesktopCommandRequest, ScaffoldLabRequest
+    DesktopCommandRequest, ScaffoldLabRequest, AutoApplyRunRequest
 )
 from app.services.digicampus_scraper import sync_digicampus
 from app.services.desktop_automation import execute_desktop_command, launch_application
 from app.services.ai_engine import scaffold_lab_environment
 from app.services.notifications import dispatch_alert
 from app.services.scheduler import background_scheduler_loop
+from app.services.auto_apply_engine import (
+    get_latest_resume, get_candidate_profile, run_auto_apply_pipeline
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("student_os")
@@ -227,6 +231,98 @@ async def add_career_entry(entry: CareerRadarModel):
     await ws_manager.broadcast({"type": "NEW_CAREER_OPPORTUNITY", "name": entry.name})
     return {"status": "created"}
 
+# ----------------- Auto-Apply Engine Endpoints -----------------
+@app.get("/api/auto-apply/status")
+async def get_auto_apply_status():
+    resume_info = get_latest_resume()
+    profile = get_candidate_profile()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT status, count(*) as count FROM career_radar GROUP BY status")
+    counts = {r["status"]: r["count"] for r in cursor.fetchall()}
+    cursor.execute("SELECT COUNT(*) as total FROM career_radar")
+    total = cursor.fetchone()["total"]
+    conn.close()
+    
+    csv_path = Path(__file__).resolve().parent.parent.parent.parent / "Auto Apply" / "all excels" / "all_applied_applications_history.csv"
+    history = []
+    if csv_path.exists():
+        import csv
+        with open(csv_path, "r", encoding="utf-8", errors="ignore") as f:
+            reader = list(csv.DictReader(f))
+            history = reader[-10:] if reader else []
+
+    return {
+        "status": "ready",
+        "resume": resume_info,
+        "candidate": {
+            "name": profile.get("full_name"),
+            "email": profile.get("email"),
+            "university": profile.get("university"),
+            "graduation_year": profile.get("graduation_year")
+        },
+        "stats": {
+            "total": total,
+            "applied": counts.get("applied", 0),
+            "open": counts.get("open", 0),
+            "upcoming": counts.get("upcoming", 0)
+        },
+        "recent_history": history
+    }
+
+@app.post("/api/auto-apply/run")
+async def trigger_auto_apply(req: AutoApplyRunRequest, background_tasks: BackgroundTasks):
+    resume_info = get_latest_resume()
+    log_agent_event("INFO", f"Triggered autonomous auto-apply pipeline using {resume_info['name']}")
+
+    def run_job():
+        import sys
+        import subprocess
+        runner_script = Path(__file__).resolve().parent.parent / "scripts" / "run_auto_apply.py"
+        cmd = [sys.executable, str(runner_script)]
+        if req.opportunity_ids:
+            cmd.extend(["--ids"] + [str(i) for i in req.opportunity_ids])
+        else:
+            cmd.append("--all")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        if proc.stdout:
+            for line in proc.stdout:
+                line_str = line.strip()
+                if line_str:
+                    logger.info(f"[AutoApply Worker] {line_str}")
+        proc.wait()
+        try:
+            asyncio.run(ws_manager.broadcast({
+                "type": "CAREER_OPPORTUNITIES_UPDATED"
+            }))
+        except Exception:
+            pass
+
+    background_tasks.add_task(run_job)
+    return {
+        "status": "started",
+        "message": f"Autonomous auto-apply initiated using latest resume ({resume_info['name']})",
+        "resume": resume_info
+    }
+
+@app.post("/api/auto-apply/opportunity/{opp_id}")
+async def apply_single_opportunity(opp_id: int):
+    resume_info = get_latest_resume()
+    log_agent_event("INFO", f"Triggered auto-apply for single opportunity ID {opp_id}")
+    import sys
+    import subprocess
+    runner_script = Path(__file__).resolve().parent.parent / "scripts" / "run_auto_apply.py"
+    proc = await asyncio.to_thread(
+        subprocess.run,
+        [sys.executable, str(runner_script), "--ids", str(opp_id)],
+        capture_output=True,
+        text=True
+    )
+    await ws_manager.broadcast({
+        "type": "CAREER_OPPORTUNITIES_UPDATED"
+    })
+    return {"status": "completed", "output": proc.stdout}
+
 # ----------------- Daily Todos Endpoints -----------------
 @app.get("/api/todos")
 async def get_daily_todos():
@@ -343,6 +439,11 @@ async def attendance_analysis_endpoint(target_pct: float = 80.0):
         })
     return analyzed
 
+
+# ----------------- Screenshots Static Mount -----------------
+screenshots_dir = Path(__file__).resolve().parent.parent.parent.parent / "Auto Apply" / "logs" / "screenshots"
+screenshots_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/api/screenshots", StaticFiles(directory=str(screenshots_dir)), name="screenshots")
 
 # ----------------- Frontend Static Files Mount -----------------
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"

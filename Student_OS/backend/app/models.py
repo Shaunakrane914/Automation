@@ -57,3 +57,7 @@ class ScaffoldLabRequest(BaseModel):
     lab_number: str
     problem_title: str
     language: str = "python"
+
+class AutoApplyRunRequest(BaseModel):
+    opportunity_ids: Optional[List[int]] = None
+    run_all: bool = True

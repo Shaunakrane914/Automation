@@ -111,7 +111,19 @@ LOG_FILE = os.path.join(os.path.dirname(__file__), "internshala_applied_jobs.csv
 
 
 def log(msg: str):
-    print(msg, flush=True)
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        clean_msg = msg.encode('ascii', 'ignore').decode('ascii')
+        print(clean_msg, flush=True)
+
+
+def can_prompt_user() -> bool:
+    """Return True only when stdin is interactive (TTY)."""
+    try:
+        return bool(sys.stdin) and sys.stdin.isatty()
+    except Exception:
+        return False
 
 
 def write_csv(row: dict):
@@ -155,6 +167,16 @@ class InternshalaBot:
     # ── Driver setup ──────────────────────────
     def setup_driver(self):
         log("🚀 Starting Chrome...")
+        try:
+            opts = Options()
+            opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+            self.driver = webdriver.Chrome(options=opts)
+            self.wait = WebDriverWait(self.driver, 15)
+            log("✅ Connected to active Chrome session on 127.0.0.1:9222!")
+            return
+        except Exception as cdp_err:
+            log(f"  CDP session note: {cdp_err}. Initializing local Chrome driver...")
+
         options = Options()
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -162,7 +184,12 @@ class InternshalaBot:
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("--start-maximized")
-        self.driver = webdriver.Chrome(options=options)
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.service import Service
+            self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        except Exception:
+            self.driver = webdriver.Chrome(options=options)
         self.wait   = WebDriverWait(self.driver, 15)
         log("✅ Chrome ready!")
 
@@ -199,8 +226,15 @@ class InternshalaBot:
             time.sleep(5)
             log("✅ Logged in!")
         except Exception as e:
-            log(f"❌ Auto-login failed ({e}). Please login manually in the browser, then press Enter...")
-            input()
+            if can_prompt_user():
+                log(f"❌ Auto-login failed ({e}). Please login manually in the browser, then press Enter...")
+                try:
+                    input()
+                except EOFError:
+                    pass
+            else:
+                log(f"⚠️  Auto-login failed ({e}); waiting 10s for manual login or proceeding...")
+                time.sleep(10)
 
     # ── Apply WFH filter ──────────────────────
     def apply_wfh_filter(self):
@@ -714,7 +748,13 @@ class InternshalaBot:
         finally:
             self._print_summary()
             if self.driver:
-                input("\nPress Enter to close browser...")
+                if can_prompt_user():
+                    try:
+                        input("\nPress Enter to close browser...")
+                    except EOFError:
+                        pass
+                else:
+                    time.sleep(3)
                 self.driver.quit()
 
     def _print_summary(self):

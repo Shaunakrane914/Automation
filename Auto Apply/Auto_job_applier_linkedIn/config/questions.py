@@ -18,8 +18,26 @@ version:    24.12.29.12.30
 
 # >>>>>>>>>>> Easy Apply Questions & Inputs <<<<<<<<<<<
 
-# Give an relative path of your default resume to be uploaded. If file in not found, will continue using your previously uploaded resume in LinkedIn.
-default_resume_path = r"c:\Users\Shaunak Rane\Desktop\Auto Apply\Resume\resume (2).pdf"      # (In Development)
+import os
+from pathlib import Path
+
+# Resolve latest resume dynamically from Auto Apply/Resume
+_auto_apply_dir = Path(__file__).resolve().parent.parent.parent
+_resume_dir = _auto_apply_dir / "Resume"
+
+def _get_latest_resume() -> str:
+    if _resume_dir.exists():
+        pdfs = list(_resume_dir.glob("*.pdf"))
+        if pdfs:
+            pdfs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            for p in pdfs:
+                if "resume (2)" in p.name:
+                    return str(p)
+            return str(pdfs[0])
+    fallback = str(_auto_apply_dir / "Resume" / "resume (2).pdf")
+    return fallback
+
+default_resume_path = _get_latest_resume()
 
 # What do you want to answer for questions that ask about years of experience you have, this is different from current_experience? 
 years_of_experience = "1"          # 3-month internship at Univitt AI Technologies

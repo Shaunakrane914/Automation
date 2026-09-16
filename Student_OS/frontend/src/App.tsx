@@ -31,7 +31,8 @@ import {
   Check,
   X,
   Maximize2,
-  RotateCcw
+  RotateCcw,
+  Eye
 } from 'lucide-react';
 
 interface Subject {
@@ -84,6 +85,8 @@ interface CareerItem {
   status: string;
   url: string;
   eligibility: string;
+  applied_at?: string;
+  proof_screenshot?: string;
 }
 
 interface TodoItem {
@@ -111,6 +114,7 @@ interface ChatMessage {
 }
 
 const QUICK_PROMPTS = [
+  { label: '⚡ Auto Apply to All Open Opportunities', query: "auto apply to all opportunities" },
   { label: '⚡ Ask Antigravity: Create NLP README', query: "Open Antigravity and ask it to create the README for today's NLP class." },
   { label: '⚡ Delegate: Train PyTorch Neural Net', query: "Train a PyTorch neural network for transformer attention mechanism" },
   { label: '📊 Check My Attendance & Risk', query: "Check my attendance" },
@@ -200,6 +204,13 @@ export default function App() {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [logs, setLogs] = useState<AgentLog[]>([]);
 
+  // Auto-Apply states
+  const [autoApplyRunning, setAutoApplyRunning] = useState(false);
+  const [autoApplyStatusMsg, setAutoApplyStatusMsg] = useState<string>('');
+  const [autoApplyProgress, setAutoApplyProgress] = useState<{ current: number; total: number; opportunity: string } | null>(null);
+  const [autoApplyInfo, setAutoApplyInfo] = useState<any>(null);
+  const [activeScreenshotModal, setActiveScreenshotModal] = useState<string | null>(null);
+
   // Desktop command states
   const [cmdInput, setCmdInput] = useState('python --version');
   const [cmdOutput, setCmdOutput] = useState('');
@@ -253,6 +264,17 @@ export default function App() {
           } else if (data.type === 'LAB_SCAFFOLDED') {
             fetchAcademicData();
             fetchLogs();
+          } else if (data.type === 'AUTO_APPLY_PROGRESS') {
+            setAutoApplyRunning(true);
+            setAutoApplyStatusMsg(`Applying to ${data.opportunity} (${data.current}/${data.total})...`);
+            setAutoApplyProgress({ current: data.current, total: data.total, opportunity: data.opportunity });
+          } else if (data.type === 'AUTO_APPLY_COMPLETED' || data.type === 'CAREER_OPPORTUNITIES_UPDATED') {
+            setAutoApplyRunning(false);
+            setAutoApplyStatusMsg('Auto-apply pipeline run completed!');
+            setAutoApplyProgress(null);
+            fetchCareerData();
+            fetchAutoApplyStatus();
+            fetchLogs();
           }
         } catch (e) {
           console.error(e);
@@ -275,6 +297,7 @@ export default function App() {
     fetchCareerData();
     fetchTodos();
     fetchLogs();
+    fetchAutoApplyStatus();
   }, []);
 
   const fetchAcademicData = async () => {
@@ -316,6 +339,40 @@ export default function App() {
       setLogs(res.data || []);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchAutoApplyStatus = async () => {
+    try {
+      const res = await axios.get('/api/auto-apply/status');
+      setAutoApplyInfo(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const triggerAutoApplyAll = async () => {
+    try {
+      setAutoApplyRunning(true);
+      setAutoApplyStatusMsg('Initiating autonomous auto-apply with latest resume...');
+      await axios.post('/api/auto-apply/run', { run_all: true });
+    } catch (err) {
+      console.error(err);
+      setAutoApplyRunning(false);
+    }
+  };
+
+  const triggerAutoApplySingle = async (oppId: number) => {
+    try {
+      setAutoApplyRunning(true);
+      setAutoApplyStatusMsg(`Applying autonomously to opportunity #${oppId}...`);
+      await axios.post(`/api/auto-apply/opportunity/${oppId}`);
+      await fetchCareerData();
+      await fetchAutoApplyStatus();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAutoApplyRunning(false);
     }
   };
 
@@ -1188,22 +1245,75 @@ export default function App() {
         {/* TAB 3: CAREER & OPPORTUNITIES */}
         {activeTab === 'career' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 flex items-center space-x-2">
-                  <Briefcase className="h-4 w-4 text-zinc-300" />
-                  <span>Opportunities & Competitions Radar (September 2026)</span>
-                </h2>
-                <p className="text-xs text-zinc-400">
-                  Verified listings for B.Tech CS (AI & ML) candidates
-                </p>
+            {/* Mission Control Auto-Apply Banner */}
+            <div className="p-4 rounded-xl border border-blue-500/30 bg-gradient-to-r from-blue-950/40 via-zinc-900 to-indigo-950/40 backdrop-blur shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start space-x-3.5">
+                <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 mt-0.5">
+                  <Zap className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wider">
+                      Autonomous Auto-Apply Engine & Career Radar
+                    </h3>
+                    <span className="px-2 py-0.5 text-[10px] font-mono rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      CDP Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Iterates over opportunities, attaches verified candidate resume, fills portal forms, and captures visual proofs.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] font-mono text-zinc-300">
+                    <span className="px-2 py-0.5 rounded bg-zinc-800/80 border border-zinc-700 text-blue-300 flex items-center space-x-1.5">
+                      <FileText className="h-3 w-3" />
+                      <span>Resume: <strong>{autoApplyInfo?.resume?.name || 'resume (2).pdf'}</strong></span>
+                    </span>
+                    <span className="text-zinc-500">•</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {careerItems.filter(c => c.status === 'applied').length} Applied
+                    </span>
+                    <span className="text-zinc-600">/</span>
+                    <span className="text-zinc-300 font-medium">
+                      {careerItems.length} Total Opportunities
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2 px-3 py-1 rounded bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs font-medium">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
-                <span>Amazon ML Challenge closes 20 Sept!</span>
+              <div className="flex items-center space-x-3 self-stretch md:self-auto">
+                <button
+                  onClick={triggerAutoApplyAll}
+                  disabled={autoApplyRunning}
+                  className={`flex-1 md:flex-none px-4 py-2.5 rounded-lg text-xs font-bold text-white transition flex items-center justify-center space-x-2 shadow-md ${
+                    autoApplyRunning
+                      ? 'bg-blue-700 opacity-80 cursor-wait'
+                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border border-blue-400/30'
+                  }`}
+                >
+                  <RefreshCw className={`h-4 w-4 ${autoApplyRunning ? 'animate-spin' : ''}`} />
+                  <span>
+                    {autoApplyRunning
+                      ? (autoApplyProgress ? `Applying (${autoApplyProgress.current}/${autoApplyProgress.total})...` : 'Applying...')
+                      : '⚡ Auto Apply All Opportunities'}
+                  </span>
+                </button>
               </div>
             </div>
+
+            {/* Live Progress Bar when Running */}
+            {autoApplyRunning && (
+              <div className="p-3 rounded-lg bg-blue-950/40 border border-blue-800/60 text-blue-200 text-xs flex items-center justify-between animate-pulse">
+                <div className="flex items-center space-x-2">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                  <span>{autoApplyStatusMsg}</span>
+                </div>
+                {autoApplyProgress && (
+                  <span className="font-mono text-[11px] text-blue-300">
+                    {Math.round((autoApplyProgress.current / autoApplyProgress.total) * 100)}%
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {careerItems.map((item) => (
@@ -1227,19 +1337,68 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-zinc-800 flex justify-between items-center">
-                    <span className="font-mono text-zinc-500 text-[11px]">STATUS: {item.status.toUpperCase()}</span>
-                    {item.url && (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 transition flex items-center space-x-1"
-                      >
-                        <span>Portal</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
+                  <div className="mt-4 pt-3 border-t border-zinc-800/80 flex flex-wrap justify-between items-center gap-2">
+                    <div className="flex items-center space-x-2">
+                      {item.status === 'applied' ? (
+                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 text-[11px] font-semibold">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>APPLIED</span>
+                        </span>
+                      ) : item.status === 'open' ? (
+                        <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-blue-950/50 text-blue-400 border border-blue-800/50 text-[10px] font-mono">
+                          OPEN
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-mono">
+                          {item.status.toUpperCase()}
+                        </span>
+                      )}
+
+                      {item.applied_at && (
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          {item.applied_at.split(' ')[0]}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      {item.proof_screenshot && (
+                        <button
+                          onClick={() => {
+                            const filename = item.proof_screenshot?.split(/[/\\]/).pop();
+                            setActiveScreenshotModal(`/api/screenshots/${filename}`);
+                          }}
+                          className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition text-[11px] font-medium flex items-center space-x-1"
+                          title="View visual proof screenshot captured during application"
+                        >
+                          <Eye className="h-3 w-3 text-zinc-400" />
+                          <span>Proof</span>
+                        </button>
+                      )}
+
+                      {item.status !== 'applied' && (
+                        <button
+                          onClick={() => triggerAutoApplySingle(item.id)}
+                          disabled={autoApplyRunning}
+                          className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold transition text-[11px] flex items-center space-x-1 disabled:opacity-50"
+                        >
+                          <Zap className="h-3 w-3" />
+                          <span>Auto Apply</span>
+                        </button>
+                      )}
+
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 transition flex items-center space-x-1 text-[11px]"
+                        >
+                          <span>Portal</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1588,6 +1747,33 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Visual Proof Screenshot Modal */}
+      {activeScreenshotModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
+              <div className="flex items-center space-x-2">
+                <Eye className="h-4 w-4 text-emerald-400" />
+                <span className="text-sm font-semibold text-zinc-200">Application Proof Verification</span>
+              </div>
+              <button
+                onClick={() => setActiveScreenshotModal(null)}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto flex-1 bg-zinc-950 flex items-center justify-center">
+              <img
+                src={activeScreenshotModal}
+                alt="Application Proof"
+                className="rounded border border-zinc-800 max-w-full h-auto object-contain"
+              />
             </div>
           </div>
         </div>

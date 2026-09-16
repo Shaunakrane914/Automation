@@ -259,6 +259,28 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         )
         return {"response": reply, "tool_used": "identity_overview"}
 
+    # 1.5 Autonomous Auto-Apply Pipeline Trigger
+    if any(k in ql for k in ["auto apply", "auto-apply", "apply to all", "apply to opportunities", "apply to jobs", "rerun auto apply"]):
+        try:
+            from app.services.auto_apply_engine import run_auto_apply_pipeline, get_latest_resume
+            resume = get_latest_resume()
+            summary = run_auto_apply_pipeline()
+            reply = (
+                f"⚡ **Autonomous Auto-Apply Pipeline Execution Completed!**\n\n"
+                f"- **Latest Resume Used:** `{resume['name']}` ({resume['size_bytes']:,} bytes)\n"
+                f"- **Opportunities Evaluated:** {summary['total']}\n"
+                f"- **Successfully Applied:** ✅ **{summary['applied']}**\n"
+                f"- **Skipped / Pending:** ⏭️ **{summary['skipped']}**\n"
+                f"- **Failed:** ❌ **{summary['failed']}**\n\n"
+                "### Application Evidence & Status:\n"
+            )
+            for res in summary["results"]:
+                reply += f"- **{res['name']}**: `{res['status'].upper()}` — {res['notes']}\n"
+            reply += "\n*Visual proof screenshots logged to `Auto Apply/logs/screenshots/` and recorded to history CSV.*"
+            return {"response": reply, "tool_used": "auto_apply_pipeline", "data": summary}
+        except Exception as e:
+            return {"response": f"⚠️ Auto-apply pipeline error: {e}", "tool_used": "auto_apply_pipeline"}
+
     # 2. Antigravity Delegation / Complex Code Creation Triggers
     antigravity_triggers = [
         "antigravity", "power to", "give it power", "ask antigravity", "delegate",

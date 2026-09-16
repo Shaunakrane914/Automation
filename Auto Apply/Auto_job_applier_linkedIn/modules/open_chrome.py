@@ -41,15 +41,31 @@ try:
         profile_dir = find_default_profile_directory()
         if profile_dir: options.add_argument(f"--user-data-dir={profile_dir}")
         else: print_lg("Default profile directory not found. Logging in with a guest profile, Web history will not be saved!")
-    if stealth_mode:
-        # try: 
-        #     driver = uc.Chrome(driver_executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe", options=options)
-        # except (FileNotFoundError, PermissionError) as e: 
-        #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__)) 
-            print_lg("Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!")
-            driver = uc.Chrome(options=options)
-    else: driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.maximize_window()
+    driver = None
+    # 1. First check if Chrome is already active on port 9222 with the user's logged-in session
+    try:
+        cdp_options = Options()
+        cdp_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+        driver = webdriver.Chrome(options=cdp_options)
+        print_lg("Connected to active Chrome session on 127.0.0.1:9222 (bypassing login & anti-bot!)")
+    except Exception as cdp_err:
+        print_lg(f"CDP port 9222 not available ({cdp_err}). Initializing dedicated Chrome driver...")
+
+    if not driver:
+        if stealth_mode:
+            try:
+                print_lg("Attempting Undetected Chrome Mode...")
+                driver = uc.Chrome(options=options)
+            except Exception as uc_err:
+                print_lg(f"Undetected mode mismatch: {uc_err}. Falling back to standard ChromeDriverManager...")
+                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        else:
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    try:
+        driver.maximize_window()
+    except Exception:
+        pass
     wait = WebDriverWait(driver, 5)
     actions = ActionChains(driver)
 except Exception as e:

@@ -13,6 +13,7 @@ import os, csv, time, urllib.parse, tempfile
 from datetime import datetime
 
 import undetected_chromedriver as uc
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -142,7 +143,19 @@ class IndeedBot:
 
     # ── Driver ────────────────────────────────
     def setup_driver(self):
-        log("🚀 Starting Chrome (undetected)...")
+        log("🚀 Starting Chrome driver...")
+        # 1. First priority: Check if Chrome is active on port 9222 with existing login session
+        try:
+            from selenium.webdriver.chrome.options import Options as SelOptions
+            opts = SelOptions()
+            opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+            self.driver = webdriver.Chrome(options=opts)
+            self.wait = WebDriverWait(self.driver, 15)
+            log("✅ Connected to active Chrome session on 127.0.0.1:9222!")
+            return
+        except Exception as cdp_err:
+            log(f"  CDP session note: {cdp_err}. Initializing local browser...")
+
         profile_dir = os.path.join(os.path.dirname(__file__), "chrome_profile_indeed_2")
         fallback_profile = tempfile.mkdtemp(prefix="indeed_uc_")
         launch_profiles = [profile_dir, fallback_profile, None]
@@ -163,9 +176,21 @@ class IndeedBot:
                 return
             except Exception as e:
                 last_error = e
-                log(f"  ⚠️  Chrome launch attempt {idx} failed: {e}")
+                log(f"  ⚠️  UC launch attempt {idx} failed: {e}")
 
-        raise RuntimeError(f"Unable to start Chrome driver after retries: {last_error}")
+        # Fallback to ChromeDriverManager
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.service import Service
+            from selenium.webdriver.chrome.options import Options as SelOptions
+            s_opts = SelOptions()
+            s_opts.add_argument("--start-maximized")
+            self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=s_opts)
+            self.wait = WebDriverWait(self.driver, 15)
+            log("✅ Chrome ready! (via ChromeDriverManager)")
+            return
+        except Exception as e2:
+            raise RuntimeError(f"Unable to start Chrome driver after retries: {last_error}, fallback: {e2}")
 
     def _is_logged_in(self) -> bool:
         """Best-effort check for active Indeed session."""
