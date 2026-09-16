@@ -1,0 +1,84 @@
+{
+  "path_status": "PASS",
+  "path": "C:\\Users\\Shaunak Rane\\Desktop\\3rd Year",
+  "file_count_before": 297,
+  "discovered_subject_folders": [
+    "AJP",
+    "AWT",
+    "BDA",
+    "Deep Learning",
+    "Mentoring",
+    "Minor Project",
+    "NLP",
+    "NLP Lab",
+    "SEPM",
+    "Summer Internship",
+    "Time Series",
+    "Training & Placement"
+  ],
+  "file_classification": {
+    ".html": 5,
+    ".md": 3,
+    ".pdf": 20,
+    ".class": 21,
+    ".py": 13,
+    ".form": 3,
+    ".ts": 7,
+    ".txt": 13,
+    ".js": 12,
+    ".json": 17,
+    "no_ext": 3,
+    ".ico": 2,
+    ".png": 96,
+    ".css": 4,
+    ".map": 3,
+    ".svg": 2,
+    ".jsx": 3,
+    ".sql": 2,
+    ".docx": 4,
+    ".ipynb": 36,
+    ".csv": 15,
+    ".pyc": 1,
+    ".ppt": 1,
+    ".pptx": 8,
+    ".ndjson": 1,
+    ".mjs": 1,
+    ".xlsx": 1
+  },
+  "sample_hash_duplicates_found": 7,
+  "sample_duplicates": [
+    {
+      "original": "AWT\\shadow\\build\\favicon.ico",
+      "duplicate": "AWT\\shadow\\public\\favicon.ico",
+      "hash": "c92b85a5b907c70211f4ec25e29a8c4a"
+    },
+    {
+      "original": "AWT\\shadow\\build\\logo192.png",
+      "duplicate": "AWT\\shadow\\public\\logo192.png",
+      "hash": "33dbdd0177549353eeeb785d02c294af"
+    },
+    {
+      "original": "AWT\\shadow\\build\\logo512.png",
+      "duplicate": "AWT\\shadow\\public\\logo512.png",
+      "hash": "917515db74ea8d1aee6a246cfbcc0b45"
+    },
+    {
+      "original": "AWT\\shadow\\build\\manifest.json",
+      "duplicate": "AWT\\shadow\\public\\manifest.json",
+      "hash": "d9d975cebe2ec20b6c652e1e4c12ccf0"
+    },
+    {
+      "original": "AWT\\shadow\\build\\robots.txt",
+      "duplicate": "AWT\\shadow\\public\\robots.txt",
+      "hash": "fa1ded1ed7c11438a9b0385b1e112850"
+    }
+  ],
+  "scanner_execution": {
+    "status": "success",
+    "total_curriculum": 20,
+    "inserted": 0,
+    "updated": 20
+  },
+  "file_count_after": 297,
+  "non_destructive_invariant": "PASS"
+}

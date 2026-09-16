@@ -1,0 +1,9 @@
+{
+  "cdp_connection": "PASS",
+  "session_state": "PASS (Authenticated)",
+  "enrolled_subjects_count": 0,
+  "subjects": [],
+  "audit_success": true,
+  "error": null,
+  "url": "https://uai.digiicampus.com/feed"
+}

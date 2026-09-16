@@ -1,0 +1,98 @@
+{
+  "test_cases": {
+    "standard_80_percent": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 80.0,
+        "attended": 8,
+        "conducted": 10,
+        "missed": 2,
+        "needed_for_75": 0,
+        "needed_for_target": 0,
+        "max_can_miss": 0,
+        "status": "SAFE"
+      }
+    },
+    "watch_76_percent": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 76.0,
+        "attended": 19,
+        "conducted": 25,
+        "missed": 6,
+        "needed_for_75": 0,
+        "needed_for_target": 6,
+        "max_can_miss": 0,
+        "status": "WATCH"
+      }
+    },
+    "risk_60_percent": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 60.0,
+        "attended": 6,
+        "conducted": 10,
+        "missed": 4,
+        "needed_for_75": 6,
+        "needed_for_target": 11,
+        "max_can_miss": 0,
+        "status": "RISK"
+      }
+    },
+    "zero_classes": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 100.0,
+        "attended": 0,
+        "conducted": 0,
+        "missed": 0,
+        "needed_for_75": 0,
+        "needed_for_target": 0,
+        "max_can_miss": 0,
+        "status": "SAFE"
+      }
+    },
+    "single_class_perfect": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 100.0,
+        "attended": 1,
+        "conducted": 1,
+        "missed": 0,
+        "needed_for_75": 0,
+        "needed_for_target": 0,
+        "max_can_miss": 0,
+        "status": "SAFE"
+      }
+    },
+    "zero_attendance": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 0.0,
+        "attended": 0,
+        "conducted": 10,
+        "missed": 10,
+        "needed_for_75": 30,
+        "needed_for_target": 41,
+        "max_can_miss": 0,
+        "status": "RISK"
+      }
+    },
+    "perfect_10_of_10": {
+      "status": "PASS",
+      "output": {
+        "current_pct": 100.0,
+        "attended": 10,
+        "conducted": 10,
+        "missed": 0,
+        "needed_for_75": 0,
+        "needed_for_target": 0,
+        "max_can_miss": 3,
+        "status": "SAFE"
+      }
+    }
+  },
+  "passed": 7,
+  "failed": 0,
+  "overall_status": "PASS"
+}

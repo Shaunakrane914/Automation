@@ -1,0 +1,79 @@
+{
+  "OS": {
+    "status": "PASS",
+    "version": "Windows 11 (10.0.26200)"
+  },
+  "Python": {
+    "status": "PASS",
+    "version": "3.13.5",
+    "executable": "C:\\Users\\Shaunak Rane\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+  },
+  "Node": {
+    "status": "PASS",
+    "version": "v22.17.1"
+  },
+  "npm": {
+    "status": "PASS",
+    "version": "10.9.2"
+  },
+  "Git": {
+    "status": "PASS",
+    "version": "git version 2.51.0.windows.2"
+  },
+  "FastAPI": {
+    "status": "PASS",
+    "version": "0.115.12"
+  },
+  "Uvicorn": {
+    "status": "PASS",
+    "version": "0.34.3"
+  },
+  "React": {
+    "status": "PASS",
+    "version": "^19.3.0"
+  },
+  "Vite": {
+    "status": "PASS",
+    "version": "^8.3.0"
+  },
+  "SQLite": {
+    "status": "PASS",
+    "version": "3.49.1",
+    "python_module": "2.6.0"
+  },
+  "Playwright": {
+    "status": "FAIL",
+    "error": "module 'playwright' has no attribute '__version__'"
+  },
+  "Gemini_CLI": {
+    "status": "FAIL \u2014 NOT INSTALLED",
+    "details": "gemini binary not found in PATH"
+  },
+  "Gemini_API_Config": {
+    "status": "FAIL \u2014 NOT CONFIGURED",
+    "details": "Neither GEMINI_API_KEY nor GOOGLE_API_KEY environment variable is set."
+  },
+  "Antigravity": {
+    "status": "PASS",
+    "path": "C:\\Users\\Shaunak Rane\\AppData\\Local\\Programs\\Antigravity\\Antigravity.exe",
+    "size_bytes": 222848000
+  },
+  "VS_Code": {
+    "status": "PASS",
+    "version": "1.136.1"
+  },
+  "Chrome": {
+    "status": "PASS",
+    "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  },
+  "Chrome_CDP": {
+    "status": "PASS",
+    "browser": "Chrome/153.0.8010.47",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/10b..."
+  },
+  "ntfy_Notification": {
+    "status": "PASS (NETWORK DELIVERY VERIFIED; DEVICE RECEIPT NOT DIRECTLY VERIFIABLE)",
+    "topic": "shaunak_student_os_alerts",
+    "http_status": 200
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "format_classification_test": {
+    "lecture.pdf": "DOCUMENT_PDF",
+    "syllabus.docx": "DOCUMENT_WORD",
+    "module1.pptx": "PRESENTATION_SLIDES",
+    "marks.xlsx": "DATA_SPREADSHEET",
+    "notes.md": "DOCUMENT_MARKDOWN",
+    "script.py": "CODE_PYTHON",
+    "main.c": "CODE_C",
+    "engine.cpp": "CODE_CPP",
+    "experiment1.ipynb": "NOTEBOOK_JUPYTER",
+    "resources.zip": "ARCHIVE_COMPRESSED",
+    "unknown.xyz": "UNKNOWN"
+  },
+  "sync_behavior_eval": {
+    "identical_file": "ALREADY_EXISTS",
+    "same_name_different_hash": "CONFLICT_DIFFERENT_HASH_SAME_NAME",
+    "different_name_same_hash": "ALREADY_EXISTS_RENAMED (matches lab1.py)",
+    "brand_new_file": "NEW"
+  },
+  "no_overwrite_guarantee": "PASS"
+}

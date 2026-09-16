@@ -1,0 +1,43 @@
+{
+  "existing_tables": [
+    "subjects",
+    "documents",
+    "assignments",
+    "career_radar",
+    "daily_todos",
+    "agent_logs",
+    "labworks"
+  ],
+  "expected_entities_audit": {
+    "subjects": true,
+    "assignments": true,
+    "documents": true,
+    "career_radar": true,
+    "daily_todos": true,
+    "agent_logs": true,
+    "labworks": true,
+    "classes": false,
+    "attendance": false,
+    "applications": false,
+    "notifications": false,
+    "sync_runs": false,
+    "user_preferences": false
+  },
+  "foreign_key_errors": 0,
+  "duplicates": {
+    "subjects": 0,
+    "assignments": 0,
+    "career_radar": 0
+  },
+  "record_counts": {
+    "subjects": 15,
+    "documents": 453,
+    "assignments": 20,
+    "career_radar": 8,
+    "daily_todos": 4,
+    "agent_logs": 90,
+    "labworks": 20
+  },
+  "persistence_test": "PASS",
+  "overall_status": "PARTIAL (Tables present: 7, Tables absent: ['classes', 'attendance', 'applications', 'notifications', 'sync_runs', 'user_preferences'])"
+}
