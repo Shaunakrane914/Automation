@@ -728,7 +728,8 @@ export default function App() {
     setChatLoading(true);
 
     try {
-      const res = await axios.post('/api/chat', { query: finalQuery });
+      const historyPayload = chatMessages.slice(-6).map((m) => ({ sender: m.sender, text: m.text }));
+      const res = await axios.post('/api/chat', { query: finalQuery, history: historyPayload });
       const assistantMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
         sender: 'assistant',

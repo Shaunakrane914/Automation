@@ -565,9 +565,10 @@ from app.services.notification_service import send_windows_notification
 from app.services.scheduler_service import workstation_daemon
 
 @app.post("/api/chat")
-async def chat_endpoint(payload: Dict[str, str]):
+async def chat_endpoint(payload: Dict[str, Any]):
     query = payload.get("query", "")
-    return process_chat_query(query)
+    history = payload.get("history", [])
+    return process_chat_query(query, history=history)
 
 @app.get("/api/chat/stream")
 async def chat_stream_endpoint(q: str = ""):
