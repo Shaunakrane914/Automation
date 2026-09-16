@@ -74,9 +74,21 @@ DEFAULT_PROFILE = {
 
 def get_latest_resume() -> Dict[str, Any]:
     """
-    Find and validate the user's latest resume from Auto Apply/Resume.
-    Prioritizes 'resume (2).pdf' as instructed, or newest PDF by modification timestamp.
+    Find and validate the user's latest resume.
+    Prioritizes Shaunak_Rane_Resume.pdf from Portfolio, then Auto Apply/Resume.
     """
+    # 1. Explicit portfolio resume requested by user
+    portfolio_resume = Path(r"C:\Users\Shaunak Rane\Desktop\Projects\Portfolio\Shaunak_Rane_Resume.pdf")
+    if portfolio_resume.exists():
+        stat = portfolio_resume.stat()
+        return {
+            "path": str(portfolio_resume.resolve()),
+            "name": portfolio_resume.name,
+            "size_bytes": stat.st_size,
+            "modified_at": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "exists": True
+        }
+
     candidates = []
     if RESUME_DIR.exists():
         for f in RESUME_DIR.glob("*.pdf"):
@@ -91,12 +103,17 @@ def get_latest_resume() -> Dict[str, Any]:
     if not candidates:
         raise FileNotFoundError(f"No PDF resume found in {RESUME_DIR}")
 
-    # Prioritize resume (2).pdf if present
+    # Prioritize Shaunak_Rane_Resume.pdf if present, then resume (2).pdf
     preferred = None
     for p in candidates:
-        if "resume (2)" in p.name.lower():
+        if "shaunak_rane_resume" in p.name.lower():
             preferred = p
             break
+    if not preferred:
+        for p in candidates:
+            if "resume (2)" in p.name.lower():
+                preferred = p
+                break
     
     if not preferred:
         candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
