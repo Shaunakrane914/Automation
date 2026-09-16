@@ -153,20 +153,21 @@ interface ChatMessage {
 
 const QUICK_PROMPTS = [
   { label: '👋 Say Hi to Copilot', query: "hi" },
+  { label: '📚 Query Course RAG: Time Series ARIMA', query: "Explain ARIMA models and stationarity from my Time Series coursework" },
+  { label: '📚 Query Course RAG: AJP Question Bank', query: "Show me questions from my AJP midterm question bank" },
+  { label: '🤖 ReAct Agent: Multi-Step Execution', query: "check if any subject has attendance below 75 percent and list its name" },
   { label: '💼 Show 7 Verified Applied Jobs', query: "show applied jobs" },
   { label: '🖥️ Workstation Hardware & GPU Specs', query: "system specs" },
+  { label: '🤖 Daemon: Check Background Status', query: "daemon status" },
   { label: '⚡ Auto Apply to All Open Opportunities', query: "auto apply to all opportunities" },
   { label: '🔬 Review Deep Learning Lab Code & Practice', query: "Show me my Deep Learning labworks, code breakdown, and practice to-do list." },
   { label: '🔬 Review NLP Text Preprocessing & BoW', query: "Show me my NLP lab practicals and what code I need to practice." },
-  { label: '🔬 Review Time Series Decomposition Code', query: "Show me my Time Series lab experiments and moving averages code." },
   { label: '📊 Check My Attendance & Risk', query: "Check my attendance" },
   { label: '⏳ What Assignments are Pending?', query: "What assignments are pending?" },
   { label: '📂 Open Deep Learning Folder', query: "Open Deep Learning folder" },
   { label: '💻 Run: git status', query: "run git status" },
   { label: '💻 Run: nvidia-smi', query: "run nvidia-smi" },
   { label: '🔄 Rerun DigiCampus Sync', query: "Rerun full digicampus audit and sync" },
-  { label: '🏆 Active Competitions & Hackathons', query: "What new opportunities or hackathons appeared today?" },
-  { label: '📌 What Should I Work on Today?', query: "What do I need to do today?" },
   { label: '⚡ Escalate to Antigravity (Explicit Directive)', query: "escalate to antigravity build full neural network architecture" },
 ];
 
@@ -881,6 +882,12 @@ export default function App() {
                         <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
                           msg.tool_used === 'delegate_to_antigravity'
                             ? 'bg-amber-950/80 text-amber-300 border border-amber-800/80 font-semibold'
+                            : msg.tool_used === 'academic_rag_llm'
+                            ? 'bg-indigo-950/90 text-indigo-300 border border-indigo-700/80 font-semibold'
+                            : msg.tool_used === 'react_agent_loop'
+                            ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-700/80 font-semibold'
+                            : msg.tool_used === 'daemon_control'
+                            ? 'bg-rose-950/80 text-rose-300 border border-rose-800/80 font-semibold'
                             : msg.tool_used === 'ollama_gpu_llm'
                             ? 'bg-purple-950/80 text-purple-300 border border-purple-800/80 font-semibold'
                             : msg.tool_used === 'gemini_cloud_llm'
@@ -2181,6 +2188,8 @@ export default function App() {
                     {msg.tool_used && (
                       <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded uppercase ${
                         msg.tool_used === 'delegate_to_antigravity' ? 'bg-amber-950/80 text-amber-300 border border-amber-800/80 font-semibold'
+                        : msg.tool_used === 'academic_rag_llm' ? 'bg-indigo-950/90 text-indigo-300 border border-indigo-700/80 font-semibold'
+                        : msg.tool_used === 'react_agent_loop' ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-700/80 font-semibold'
                         : msg.tool_used === 'ollama_gpu_llm' ? 'bg-purple-950/80 text-purple-300 border border-purple-800/80 font-semibold'
                         : msg.tool_used === 'workstation_greeting' ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/80'
                         : msg.tool_used === 'applied_applications' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'

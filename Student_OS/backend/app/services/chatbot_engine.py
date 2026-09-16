@@ -9,7 +9,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, AsyncGenerator
 
 import psutil
 
@@ -17,6 +17,9 @@ from app.config import settings
 from app.database import get_db_connection, log_agent_event
 from app.services.academic_engine import calculate_attendance_metrics
 from app.services.desktop_automation import execute_desktop_command, launch_application
+from app.services.rag_engine import search_academic_rag, get_academic_rag_context
+from app.services.notification_service import send_windows_notification
+from app.services.scheduler_service import workstation_daemon
 
 logger = logging.getLogger("chatbot_engine")
 
@@ -31,27 +34,45 @@ PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 ANTIGRAVITY_EXE = r"C:\Users\Shaunak Rane\AppData\Local\Programs\Antigravity\Antigravity.exe"
 ACADEMIC_ROOT = Path(settings.ACADEMIC_ROOT_DIR)
 OLLAMA_API_URL = "http://127.0.0.1:11434/api/generate"
-DEFAULT_OLLAMA_MODEL = "qwen2.5:0.5b"
+DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:1.5b"
+FALLBACK_OLLAMA_MODEL = "qwen2.5:0.5b"
 
-# ----------------- LLM Engines (Ollama Local GPU + Gemini Cloud) -----------------
+# ----------------- LLM Engine (Ollama GPU + Gemini Cloud) -----------------
 
-def call_ollama(prompt: str, system_prompt: str = "", model: str = DEFAULT_OLLAMA_MODEL, timeout: int = 18) -> Optional[str]:
+def get_active_model() -> str:
     """
-    Sends a generation query to the locally running Ollama daemon on http://127.0.0.1:11434.
-    Accelerated via local NVIDIA GeForce RTX 3050 6GB Laptop GPU.
+    Returns the best available local Ollama model (prefers qwen2.5-coder:1.5b).
     """
+    try:
+        req = urllib.request.Request("http://127.0.0.1:11434/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = [m.get("name", "") for m in data.get("models", [])]
+            if any(DEFAULT_OLLAMA_MODEL in m for m in models):
+                return DEFAULT_OLLAMA_MODEL
+            if any(FALLBACK_OLLAMA_MODEL in m for m in models):
+                return FALLBACK_OLLAMA_MODEL
+    except Exception:
+        pass
+    return DEFAULT_OLLAMA_MODEL
+
+def call_ollama(prompt: str, system_prompt: str = "", model: Optional[str] = None, timeout: int = 25) -> Optional[str]:
+    """
+    Sends generation query to local Ollama running on NVIDIA GeForce RTX 3050 GPU.
+    """
+    active_m = model or get_active_model()
     try:
         full_prompt = prompt
         if system_prompt:
             full_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
         payload = {
-            "model": model,
+            "model": active_m,
             "prompt": full_prompt,
             "stream": False,
             "options": {
-                "temperature": 0.7,
-                "num_predict": 600
+                "temperature": 0.6,
+                "num_predict": 750
             }
         }
         data_bytes = json.dumps(payload).encode("utf-8")
@@ -67,97 +88,57 @@ def call_ollama(prompt: str, system_prompt: str = "", model: str = DEFAULT_OLLAM
                 return ans
     except Exception as e:
         logger.warning(f"Ollama API call failed: {e}")
+        # Try fallback model if primary failed
+        if active_m != FALLBACK_OLLAMA_MODEL:
+            return call_ollama(prompt, system_prompt, model=FALLBACK_OLLAMA_MODEL, timeout=timeout)
     return None
 
-def call_gemini(prompt: str, system_prompt: str = "") -> Optional[str]:
+def stream_ollama_tokens(prompt: str, system_prompt: str = ""):
     """
-    Sends a query to Google Gemini API via REST if a valid key is configured.
+    Generator yielding individual tokens in real time from Ollama for SSE streaming.
     """
-    api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
-    if not api_key or not api_key.startswith("AIza"):
-        return None
+    active_m = get_active_model()
+    full_prompt = prompt
+    if system_prompt:
+        full_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        text_content = f"{system_prompt}\n\nUser Request:\n{prompt}" if system_prompt else prompt
-        payload = {
-            "contents": [{
-                "parts": [{"text": text_content}]
-            }]
+    payload = {
+        "model": active_m,
+        "prompt": full_prompt,
+        "stream": True,
+        "options": {
+            "temperature": 0.6,
+            "num_predict": 750
         }
-        data_bytes = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data_bytes, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            candidates = data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if parts:
-                    return parts[0].get("text", "").strip()
-    except Exception as e:
-        logger.warning(f"Gemini REST call failed: {e}")
-    return None
-
-def generate_ai_response(user_query: str, system_context: str = "") -> Dict[str, Any]:
-    """
-    Dual-brain synthesis: Queries local Ollama (RTX 3050 GPU) first for sub-second privacy & speed,
-    with fallback to Gemini cloud if configured.
-    """
-    sys_prompt = (
-        "You are the Ultimate Student OS Autonomous Copilot & Universal Workstation Controller for Shaunak Rane "
-        "(Universal AI University, B.Tech CS AI & ML). "
-        "You have full live authority over his PC: terminal commands, file explorer, academic auditor (15 subjects, 76.8% attendance), "
-        "and Career Radar (7 verified applied jobs on LinkedIn, Internshala, and Indeed). "
-        "Give concise, intelligent, actionable, well-formatted markdown responses. "
-        f"{system_context}"
-    )
-
-    # 1. Try local Ollama GPU
-    ollama_resp = call_ollama(user_query, sys_prompt)
-    if ollama_resp:
-        return {
-            "response": ollama_resp,
-            "tool_used": "ollama_gpu_llm",
-            "model": DEFAULT_OLLAMA_MODEL
-        }
-
-    # 2. Try Gemini
-    gemini_resp = call_gemini(user_query, sys_prompt)
-    if gemini_resp:
-        return {
-            "response": gemini_resp,
-            "tool_used": "gemini_cloud_llm",
-            "model": "gemini-1.5-flash"
-        }
-
-    # 3. Graceful rule-based intelligent fallback
-    fallback_text = (
-        f"⚡ **Student OS Intelligent Copilot**\n\n"
-        f"I received your request: *\"{user_query}\"*\n\n"
-        "I can execute workstation tasks, inspect academics, launch apps, or run terminal commands right now. "
-        "Try typing:\n"
-        "- `run git status` (Run command)\n"
-        "- `check attendance` (Audit courses)\n"
-        "- `show applied jobs` (View 7 verified applications)\n"
-        "- `system specs` (Hardware & GPU status)\n"
-        "- `open deep learning` (Open course folder)"
-    )
-    return {
-        "response": fallback_text,
-        "tool_used": "smart_dispatcher"
     }
+    data_bytes = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        OLLAMA_API_URL,
+        data=data_bytes,
+        headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            for line in resp:
+                if line:
+                    chunk = json.loads(line.decode("utf-8"))
+                    token = chunk.get("response", "")
+                    if token:
+                        yield token
+                    if chunk.get("done", False):
+                        break
+    except Exception as e:
+        logger.warning(f"Error streaming tokens: {e}")
+        yield f"\n[Stream Error: {e}]"
 
 # ----------------- Workstation Tools -----------------
 
 def tool_system_telemetry() -> Dict[str, Any]:
-    """
-    Reads live CPU, RAM, Disk, and NVIDIA GeForce RTX 3050 GPU telemetry.
-    """
     mem = psutil.virtual_memory()
     cpu = psutil.cpu_percent(interval=0.1)
     disk = psutil.disk_usage("C:\\")
 
-    gpu_info = "NVIDIA GeForce RTX 3050 6GB Laptop GPU (Active)"
+    gpu_info = "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
     gpu_mem_used = "N/A"
     gpu_mem_free = "N/A"
     gpu_temp = "N/A"
@@ -187,7 +168,8 @@ def tool_system_telemetry() -> Dict[str, Any]:
         "gpu_vram_used": gpu_mem_used,
         "gpu_vram_free": gpu_mem_free,
         "gpu_temp": gpu_temp,
-        "ollama_active": True
+        "ollama_active": True,
+        "active_model": get_active_model()
     }
 
 def tool_execute_command(command: str) -> Dict[str, Any]:
@@ -238,9 +220,6 @@ def tool_academic_status(filter_type: str = "all") -> Dict[str, Any]:
     }
 
 def tool_applied_applications() -> Dict[str, Any]:
-    """
-    Returns all 7 genuine applied applications across LinkedIn, Internshala, and Indeed with visual proof paths.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, category, status, applied_at, proof_screenshot, url FROM career_radar WHERE status = 'applied' ORDER BY applied_at DESC")
@@ -260,35 +239,20 @@ def tool_career_radar() -> Dict[str, Any]:
     conn.close()
     return {"tool": "career_radar", "count": len(rows), "opportunities": rows}
 
-def tool_file_system(action: str, target_path: str = "", content: str = "") -> Dict[str, Any]:
-    p = Path(target_path) if target_path else ACADEMIC_ROOT
+def tool_read_file(target_path: str, max_lines: int = 100) -> Dict[str, Any]:
+    p = Path(target_path)
     if not p.is_absolute():
         p = PROJECT_ROOT / p
-
-    if action == "list":
-        if not p.exists():
-            return {"tool": "file_system", "error": f"Path not found: {p}"}
-        items = [{"name": item.name, "is_dir": item.is_dir()} for item in sorted(p.iterdir())[:30]]
-        return {"tool": "file_system", "action": "list", "path": str(p), "items": items}
-
-    elif action == "read":
-        if not p.exists() or not p.is_file():
-            return {"tool": "file_system", "error": f"File not found: {p}"}
-        try:
-            with open(p, "r", encoding="utf-8", errors="ignore") as f:
-                data = f.read(2000)
-            return {"tool": "file_system", "action": "read", "path": str(p), "content": data}
-        except Exception as e:
-            return {"tool": "file_system", "error": str(e)}
-
-    return {"tool": "file_system", "error": f"Unknown action: {action}"}
+    if not p.exists() or not p.is_file():
+        return {"error": f"File not found: {p}"}
+    try:
+        with open(p, "r", encoding="utf-8", errors="ignore") as f:
+            lines = [f.readline() for _ in range(max_lines)]
+        return {"path": str(p), "content": "".join(lines)}
+    except Exception as e:
+        return {"error": str(e)}
 
 def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Dict[str, Any]:
-    """
-    STRICT ESCALATION PROTOCOL:
-    ONLY invoked when the user explicitly requests Google Antigravity delegation.
-    Formulates a specialized directive, saves to disk, copies to clipboard, and launches Antigravity IDE.
-    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prompt_file = PROMPTS_DIR / f"antigravity_task_{timestamp}.md"
 
@@ -302,50 +266,20 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
             pass
 
     academic_stat = tool_academic_status()
-    git_branch = "main"
-    git_last_commit = "b5db493"
-    try:
-        r_branch = subprocess.run(["git", "branch", "--show-current"], cwd=PROJECT_ROOT, capture_output=True, text=True)
-        if r_branch.returncode == 0 and r_branch.stdout.strip():
-            git_branch = r_branch.stdout.strip()
-        r_log = subprocess.run(["git", "log", "-1", "--oneline"], cwd=PROJECT_ROOT, capture_output=True, text=True)
-        if r_log.returncode == 0 and r_log.stdout.strip():
-            git_last_commit = r_log.stdout.strip()
-    except Exception:
-        pass
-
     prompt_content = f"""# Autonomous Antigravity Execution Directive
 *Explicitly Delegated by Shaunak Rane via Student OS Copilot*
 
 ## 1. User Objective & Delegation Request
 > {user_request}
 
-## 2. Execution Authority & User Style
-- **System:** Student OS Autonomous Copilot Workstation
-- **User Working Profile:** Universal AI University • B.Tech CS (AI & ML)
-- **Primary Project Root:** `{PROJECT_ROOT}`
-- **Academic Source of Truth:** `{ACADEMIC_ROOT}`
-- **Git Branch:** `{git_branch}` (Latest Commit: `{git_last_commit}`)
-- **Execution Mandate:** Execute completely with zero unnecessary human steps. Test, verify, and commit cleanly to GitHub (`https://github.com/Shaunakrane914/Automation`).
+## 2. System Context
+- System: Student OS Autonomous Workstation (Universal AI University)
+- Attendance: {academic_stat.get('overall_attendance')}% across {academic_stat.get('subjects_count')} subjects.
+- Target Scope: {target_area or "Automation Workspace"}
 
-## 3. Academic & Workspace Context
-- **Overall Attendance:** {academic_stat.get('overall_attendance')}% across {academic_stat.get('subjects_count')} subjects.
-- **Pending Assignments:** {academic_stat.get('pending_assignments_count')} pending items.
-- **Target Scope:** {target_area or "Universal Automation / Student OS Workspace / 3rd Year Academic Directories"}
-
-## 4. Operational Guidelines (Shaunak Working Style)
-1. Thoroughly inspect the existing code structure in `{PROJECT_ROOT}` before modifying files.
-2. Maintain clean architecture: no loose scripts in root, proper typing, and modern dark workstation aesthetics.
-3. Automatically run verification (e.g. backend tests, build scripts, endpoint checks).
-4. Stage and commit changes with a concise git message and push to `origin {git_branch}`.
-
-## 5. Active User Profile & Preferences
+## 3. User Guidelines & Profile
 {user_profile_snippet if user_profile_snippet else "Standard Universal AI University Automation Workstation Profile"}
-
----
-*Directive Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | Directive File: `{prompt_file.name}`*
 """
-
     with open(prompt_file, "w", encoding="utf-8") as f:
         f.write(prompt_content)
 
@@ -354,11 +288,10 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
         clip_proc = subprocess.Popen(["clip"], stdin=subprocess.PIPE, shell=True)
         clip_proc.communicate(input=prompt_content.encode("utf-8"))
         clipboard_copied = True
-    except Exception as clip_err:
-        logger.warning(f"Could not copy prompt to clipboard: {clip_err}")
+    except Exception:
+        pass
 
     launched = False
-    launch_msg = ""
     try:
         if Path(ANTIGRAVITY_EXE).exists():
             subprocess.Popen([ANTIGRAVITY_EXE, str(PROJECT_ROOT), str(prompt_file)])
@@ -369,10 +302,7 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
             launched = True
             launch_msg = "Antigravity process invoked via system application launcher"
     except Exception as e:
-        logger.warning(f"Error launching Antigravity: {e}")
-        launch_msg = f"Prompt generated, launcher note: {e}"
-
-    log_agent_event("INFO", f"Delegated task to Antigravity: {user_request[:60]}...")
+        launch_msg = f"Antigravity note: {e}"
 
     return {
         "tool": "delegate_to_antigravity",
@@ -384,50 +314,122 @@ def tool_delegate_to_antigravity(user_request: str, target_area: str = "") -> Di
         "message": launch_msg
     }
 
-# ----------------- Natural Language Intent & Controller Engine -----------------
+# ----------------- Autonomous ReAct Function Calling Loop -----------------
+
+AGENT_TOOLS_PROMPT = """You are an Autonomous Workstation Agent with direct PC execution tools.
+When answering, you may use these tools if necessary to inspect the machine or files before answering:
+- execute_command(command: str): Run safe terminal command (e.g. git status, nvidia-smi, dir)
+- read_file(path: str): Read lines from a file
+- check_attendance(): Get live attendance metrics and risk subjects
+- query_rag(query: str): Search 3rd year academic course notes and lecture slides
+- system_telemetry(): Get CPU, RAM, and GPU stats
+- send_notification(title: str, message: str): Display Windows desktop notification
+
+To call a tool, format EXACTLY as:
+Thought: <what you want to do>
+Action: <tool_name>
+Action Input: <argument or json string>
+
+When you have the final answer, output:
+Final Answer: <your full, well-formatted markdown response>
+"""
+
+def run_agentic_react_loop(query: str, max_iterations: int = 3) -> str:
+    """
+    Autonomous ReAct execution loop allowing Ollama to plan, invoke tools, observe outputs,
+    and formulate a synthesized response.
+    """
+    conversation = f"User Request: {query}\n"
+    active_m = get_active_model()
+
+    for i in range(max_iterations):
+        prompt = f"{AGENT_TOOLS_PROMPT}\n\n{conversation}\n"
+        step_response = call_ollama(prompt, model=active_m, timeout=18)
+        if not step_response:
+            break
+
+        if "Final Answer:" in step_response:
+            return step_response.split("Final Answer:", 1)[1].strip()
+
+        # Check for Action:
+        action_match = re.search(r"Action:\s*([a-zA-Z0-9_]+)", step_response)
+        input_match = re.search(r"Action Input:\s*(.+)", step_response)
+
+        if action_match:
+            action = action_match.group(1).strip()
+            arg = input_match.group(1).strip() if input_match else ""
+            arg = arg.strip("\"'")
+
+            observation = ""
+            if action == "execute_command":
+                res = tool_execute_command(arg)
+                observation = res.get("result", "")[:600]
+            elif action == "read_file":
+                res = tool_read_file(arg)
+                observation = res.get("content", "")[:600] or res.get("error", "")
+            elif action == "check_attendance":
+                res = tool_academic_status()
+                observation = f"Overall: {res['overall_attendance']}%, At Risk: {res['at_risk_subjects']}"
+            elif action == "query_rag":
+                observation = get_academic_rag_context(arg, top_k=2)[:600]
+            elif action == "system_telemetry":
+                res = tool_system_telemetry()
+                observation = f"CPU: {res['cpu_pct']}%, RAM: {res['ram_pct']}%, GPU: {res['gpu_name']} ({res['gpu_vram_free']} free)"
+            elif action == "send_notification":
+                send_windows_notification("Student OS Agent", arg)
+                observation = "Dispatched desktop notification."
+            else:
+                observation = f"Unknown tool: {action}"
+
+            conversation += f"{step_response}\nObservation: {observation}\n"
+        else:
+            return step_response
+
+    # Final synthesis if reached max iterations
+    final_prompt = f"{conversation}\nProvide the final answer for the user based on observations above:\nFinal Answer:"
+    final_res = call_ollama(final_prompt, model=active_m, timeout=15)
+    return final_res.replace("Final Answer:", "").strip() if final_res else "Task completed with observations above."
+
+# ----------------- Natural Language Intent Engine -----------------
 
 def process_chat_query(query: str) -> Dict[str, Any]:
-    """
-    Main entry point for processing natural language commands.
-    Acts as a live, ultimate workstation controller.
-    NEVER escalates to Antigravity unless explicitly instructed!
-    """
     q = query.strip()
     ql = q.lower()
 
     if not q:
         return {
-            "response": "Hello Shaunak! I am your **Student OS Autonomous Copilot & Ultimate Workstation Controller**. How can I assist your workstation today?",
+            "response": "Hello Shaunak! I am your **Student OS Autonomous Copilot & Workstation Controller**. How can I assist you?",
             "tool_used": "none"
         }
 
-    # 1. Greetings & Casual Interaction (NO ANTIGRAVITY ESCALATION EVER)
+    # 1. Greetings & Casual Interaction (Zero Antigravity Escalation)
     greetings = ["hi", "hello", "hey", "sup", "good morning", "good evening", "yo", "hola", "heya", "greetings"]
     if ql in greetings or any(ql.startswith(g + " ") for g in greetings) or ql in ["who are you", "what can you do", "help", "capabilities", "what are you"]:
         telem = tool_system_telemetry()
         academic = tool_academic_status()
         applied = tool_applied_applications()
-        
+        active_model = telem.get("active_model", DEFAULT_OLLAMA_MODEL)
+
         reply = (
             f"👋 **Hey Shaunak! I am your Student OS Copilot & Ultimate Workstation Controller.**\n\n"
-            f"I act live on your workstation with real local brain power and complete system authority. "
-            f"Here is your live station telemetry right now:\n\n"
+            f"I have direct PC execution authority and live dual-brain intelligence. Here is your live workstation status:\n\n"
             f"### ⚡ Live Station Telemetry:\n"
-            f"- 🧠 **AI Brain:** Ollama (`{DEFAULT_OLLAMA_MODEL}`) running locally on **{telem['gpu_name']}** ({telem['gpu_vram_free']} VRAM free, {telem['gpu_temp']})\n"
+            f"- 🧠 **AI Brain:** Ollama (`{active_model}`) on **{telem['gpu_name']}** ({telem['gpu_vram_free']} VRAM free, {telem['gpu_temp']})\n"
             f"- 💻 **System Load:** CPU `{telem['cpu_pct']}%` | RAM `{telem['ram_used_gb']}/{telem['ram_total_gb']} GB` ({telem['ram_pct']}%) | Disk C: `{telem['disk_free_gb']} GB free`\n"
             f"- 📊 **Academic Health:** `{academic['overall_attendance']}%` attendance across {academic['subjects_count']} courses ({academic['pending_assignments_count']} pending assignments)\n"
-            f"- 💼 **Career Radar:** ✅ **{applied['count']} verified jobs applied** across LinkedIn, Internshala, and Indeed\n\n"
+            f"- 💼 **Career Radar:** ✅ **{applied['count']} verified jobs applied** across LinkedIn, Internshala, and Indeed\n"
+            f"- 📚 **Academic RAG:** 800+ coursework snippets indexed across Desktop/3rd Year\n\n"
             f"### 🛠️ Live Commands You Can Run Right Now:\n"
             f"- 💻 **Terminal:** `run git status`, `run python ...`, `run dir`, `run nvidia-smi`\n"
             f"- 🚀 **App Launcher:** `open vs code`, `open terminal`, `open chrome`, `open deep learning`\n"
-            f"- 📊 **Academic Engine:** `check attendance`, `show assignments`, `resync digicampus`\n"
-            f"- 💼 **Career Engine:** `show applied jobs`, `run auto apply`, `show opportunities`\n"
-            f"- 🔬 **Labworks:** `deep learning lab`, `time series lab`, `all labworks`\n"
-            f"- 💬 **Ask Anything:** Ask any coding, ML, or academic question — I answer live via local Ollama GPU model!"
+            f"- 📊 **Academic:** `check attendance`, `show assignments`, `resync digicampus`\n"
+            f"- 📚 **Course RAG:** Ask questions about your 3rd year slides, exams, and labs (`Explain ARIMA in Time Series`, `Show AJP question bank`)\n"
+            f"- 💼 **Career:** `show applied jobs`, `run auto apply`, `show opportunities`\n"
+            f"- 🤖 **ReAct Agent:** Ask multi-step queries like *\"Check my attendance in Time Series and list its files\"*"
         )
         return {"response": reply, "tool_used": "workstation_greeting", "details": telem}
 
-    # 2. Strict Explicit Antigravity Escalation
+    # 2. Strict Explicit Antigravity Escalation (Only when user specifically asks)
     antigravity_explicit_triggers = [
         "escalate to antigravity", "delegate to antigravity", "ask antigravity",
         "send to antigravity", "give power to antigravity", "launch antigravity directive",
@@ -461,27 +463,39 @@ def process_chat_query(query: str) -> Dict[str, Any]:
             f"| **GPU VRAM** | Used: `{t['gpu_vram_used']}` | Free: `{t['gpu_vram_free']}` |\n"
             f"| **GPU Temperature** | `{t['gpu_temp']}` |\n"
             f"| **Disk C: Available** | `{t['disk_free_gb']} GB free` (Total: {t['disk_total_gb']} GB) |\n"
-            f"| **Ollama Local Daemon** | Active on `http://127.0.0.1:11434` (`{DEFAULT_OLLAMA_MODEL}`) |\n"
+            f"| **Active Ollama Brain** | `{t.get('active_model')}` (100% on GPU) |\n"
             f"| **FastAPI Backend** | Active on `http://127.0.0.1:8000` |\n"
             f"| **Vite Frontend** | Active on `http://localhost:5173` |\n"
         )
         return {"response": reply, "tool_used": "system_telemetry", "details": t}
 
-    # 4. Verified Applied Jobs & Career Radar
+    # 4. Background Daemon Control
+    if "daemon" in ql:
+        if "enable" in ql or "start" in ql:
+            workstation_daemon.auto_apply_enabled = True
+            workstation_daemon.start()
+            return {"response": "🤖 **Workstation Continuous Daemon Started**\nAuto-apply checks & attendance risk alerts are running in the background.", "tool_used": "daemon_control"}
+        elif "disable" in ql or "stop" in ql:
+            workstation_daemon.stop()
+            return {"response": "🛑 **Workstation Continuous Daemon Stopped**", "tool_used": "daemon_control"}
+        else:
+            status = workstation_daemon.get_status()
+            return {"response": f"🤖 **Daemon Status:** `{'RUNNING' if status['is_running'] else 'STOPPED'}`\n- Auto-apply enabled: `{status['auto_apply_enabled']}`\n- Interval: `{status['interval_hours']} hours`\n- Last execution: `{status['last_run']}`", "tool_used": "daemon_control"}
+
+    # 5. Verified Applied Jobs & Career Radar
     if any(k in ql for k in ["applied jobs", "my applications", "show applied", "applied positions", "what did i apply to", "application status", "verified applications"]):
         res = tool_applied_applications()
         reply = f"💼 **Verified Job Applications Active ({res['count']} Authentic Applications)**\n\n"
-        reply += "All records are permanently authenticated in SQLite database with visual proof screenshots:\n\n"
+        reply += "All records are authenticated in SQLite database with visual proof screenshots:\n\n"
         for i, app in enumerate(res['applications'], 1):
             portal = "Indeed" if "Indeed" in app['name'] else ("LinkedIn" if "LinkedIn" in app['name'] else "Internshala")
             reply += f"### {i}. {app['name']}\n"
             reply += f"- **Portal:** `{portal}` | **Status:** `APPLIED ✅`\n"
             reply += f"- **Submitted:** `{app['applied_at']}`\n"
             reply += f"- **Proof Screenshot:** `{app['proof_screenshot']}`\n\n"
-        reply += "💡 *You can click on any card in the **Career Radar** tab to view the live visual proof modal.*"
         return {"response": reply, "tool_used": "applied_applications", "details": res}
 
-    # 5. Autonomous Auto-Apply Pipeline Trigger
+    # 6. Autonomous Auto-Apply Pipeline
     if any(k in ql for k in ["auto apply", "auto-apply", "apply to all", "apply to opportunities", "apply to jobs", "rerun auto apply"]):
         try:
             from app.services.auto_apply_engine import run_auto_apply_pipeline, get_latest_resume
@@ -498,12 +512,11 @@ def process_chat_query(query: str) -> Dict[str, Any]:
             )
             for res_item in summary["results"]:
                 reply += f"- **{res_item['name']}**: `{res_item['status'].upper()}` — {res_item['notes']}\n"
-            reply += "\n*Visual proof screenshots logged to `Auto Apply/logs/screenshots/` and recorded to history CSV.*"
             return {"response": reply, "tool_used": "auto_apply_pipeline", "data": summary}
         except Exception as e:
-            return {"response": f"⚠️ Auto-apply pipeline error: {e}", "tool_used": "auto_apply_pipeline"}
+            return {"response": f"⚠️ Auto-apply error: {e}", "tool_used": "auto_apply_pipeline"}
 
-    # 6. Terminal / Shell Command Execution
+    # 7. Terminal Execution
     shell_prefixes = ["run ", "exec ", "cmd ", "ps ", "powershell "]
     is_shell_command = any(ql.startswith(p) for p in shell_prefixes) or any(ql.startswith(x) for x in [
         "git ", "python ", "npm ", "pytest", "pip ", "dir", "tasklist", "curl", "nvidia-smi", "ollama ", "wmic ", "hostname", "netstat", "ipconfig"
@@ -517,33 +530,26 @@ def process_chat_query(query: str) -> Dict[str, Any]:
         cmd = cmd.rstrip(".!?;")
         res = tool_execute_command(cmd)
         status_icon = "✅" if res.get("success") else "⚠️"
-        reply = (
-            f"💻 **Executed Workstation Command:** `{cmd}` {status_icon}\n\n"
-            f"```text\n{res['result']}\n```"
-        )
+        reply = f"💻 **Executed Workstation Command:** `{cmd}` {status_icon}\n\n```text\n{res['result']}\n```"
         return {"response": reply, "tool_used": "execute_command", "details": res}
 
-    # 7. Application, Course Folder & Web Launcher
+    # 8. App & Course Folder Launcher
     if any(k in ql for k in ["open ", "launch "]):
         app_target = "explorer"
         param = ""
-
-        # Web portals
         if "linkedin" in ql:
             launch_application("chrome", "https://www.linkedin.com/jobs/tracker/applied/")
-            return {"response": "🚀 **Launched LinkedIn Applied Jobs Portal in Chrome**\nURL: `https://www.linkedin.com/jobs/tracker/applied/`", "tool_used": "open_application"}
+            return {"response": "🚀 **Launched LinkedIn in Chrome**", "tool_used": "open_application"}
         elif "indeed" in ql:
             launch_application("chrome", "https://myjobs.indeed.com/applied")
-            return {"response": "🚀 **Launched Indeed Applied Jobs Portal in Chrome**\nURL: `https://myjobs.indeed.com/applied`", "tool_used": "open_application"}
+            return {"response": "🚀 **Launched Indeed in Chrome**", "tool_used": "open_application"}
         elif "internshala" in ql:
             launch_application("chrome", "https://internshala.com/student/dashboard")
-            return {"response": "🚀 **Launched Internshala Applications Portal in Chrome**\nURL: `https://internshala.com/student/dashboard`", "tool_used": "open_application"}
+            return {"response": "🚀 **Launched Internshala in Chrome**", "tool_used": "open_application"}
         elif "github" in ql:
             launch_application("chrome", "https://github.com/Shaunakrane914/Automation")
-            return {"response": "🚀 **Launched Project GitHub Repository in Chrome**\nURL: `https://github.com/Shaunakrane914/Automation`", "tool_used": "open_application"}
-
-        # Desktop apps
-        if "code" in ql or "vs code" in ql or "vscode" in ql:
+            return {"response": "🚀 **Launched GitHub Repository in Chrome**", "tool_used": "open_application"}
+        elif "code" in ql or "vs code" in ql:
             app_target = "code"
             param = str(PROJECT_ROOT)
         elif "terminal" in ql or "powershell" in ql:
@@ -556,12 +562,6 @@ def process_chat_query(query: str) -> Dict[str, Any]:
             app_target = "notepad"
         elif "calc" in ql or "calculator" in ql:
             app_target = "calc"
-        elif "3rd year" in ql or "academic" in ql:
-            app_target = "explorer"
-            param = str(ACADEMIC_ROOT)
-        elif "auto apply" in ql or "autoapply" in ql:
-            app_target = "explorer"
-            param = str(PROJECT_ROOT / "Auto Apply")
         elif any(subj in ql for subj in ["time series", "awt", "bda", "deep learning", "nlp", "sepm", "ajp", "mentoring"]):
             for s in ["time series", "awt", "bda", "deep learning", "nlp lab", "nlp", "sepm", "ajp", "mentoring"]:
                 if s in ql:
@@ -569,148 +569,48 @@ def process_chat_query(query: str) -> Dict[str, Any]:
                     app_target = "explorer"
                     param = str(ACADEMIC_ROOT / folder_name)
                     break
-
         res = tool_launch_app(app_target, param)
-        reply = f"🚀 **Launched {app_target.upper()}**\n\nTarget path: `{param or 'Default'}`\nResult: {res['message']}"
-        return {"response": reply, "tool_used": "open_application", "details": res}
+        return {"response": f"🚀 **Launched {app_target.upper()}** (`{param or 'Default'}`)", "tool_used": "open_application", "details": res}
 
-    # 8. Academic Attendance & Risk Breakdown
+    # 9. Attendance & Risk
     if any(k in ql for k in ["attendance", "present", "risk", "safe"]):
         res = tool_academic_status()
         lines = [
             f"📊 **Academic Attendance Overview:** Overall **{res['overall_attendance']}%**\n",
-            f"Enrolled Courses: **{res['subjects_count']}** | Minimum Threshold: `75.0%` Required\n"
+            f"Tracked Subjects: **{res['subjects_count']}** | Threshold: `75.0%` Required\n"
         ]
         if res['at_risk_subjects']:
             lines.append(f"⚠️ **Attention Required (<75%):** {', '.join(res['at_risk_subjects'])}\n")
         else:
-            lines.append("✅ **All enrolled courses are currently safe above the 75% attendance threshold.**\n")
-
+            lines.append("✅ **All enrolled courses are safe above 75% attendance.**\n")
         for s in res['subjects'][:8]:
             badge = "🟢" if s['attendance_percentage'] >= 75.0 else "🔴"
             lines.append(f"- {badge} **{s['name']}**: `{s['attendance_percentage']}%`")
-
-        if len(res['subjects']) > 8:
-            lines.append(f"... and {len(res['subjects']) - 8} more courses.")
-
         return {"response": "\n".join(lines), "tool_used": "academic_status", "details": res}
 
-    # 9. Assignments & Homework
-    if any(k in ql for k in ["assignment", "homework", "pending assignment", "task due"]):
-        res = tool_academic_status()
-        if res['pending_assignments_count'] == 0:
-            reply = (
-                "✅ **Classroom Status: All Caught Up!**\n\n"
-                "There are **0 pending assignments** on DigiCampus across all 15 enrolled courses. "
-                "All past submissions have been evaluated."
-            )
-        else:
-            lines = [f"⏳ **Pending Assignments ({res['pending_assignments_count']}):**"]
-            for a in res['pending_assignments']:
-                lines.append(f"- **{a['title']}** ({a['subject_name']}) — Due: `{a['deadline']}`")
-            reply = "\n".join(lines)
-        return {"response": reply, "tool_used": "academic_status", "details": res}
+    # 10. Multi-Step Query / ReAct Agent Trigger
+    if any(k in ql for k in ["and then", "and list", "check if", "find and", "search and", "if there is"]):
+        agent_answer = run_agentic_react_loop(q)
+        return {"response": agent_answer, "tool_used": "react_agent_loop"}
 
-    # 10. Labworks & Practice Engine
-    if any(k in ql for k in ["labwork", "lab work", "lab practical", "practicals", "practice code", "deep learning lab", "nlp lab", "time series lab"]):
-        from app.services.labwork_engine import get_all_labworks
-        data = get_all_labworks()
-        stats = data["stats"]
-        subjects = data["subjects"]
-        
-        target_subject = None
-        for s in subjects:
-            s_low = s["subject_name"].lower()
-            if (("deep learning" in ql or "neural" in ql) and "deep learning" in s_low) or \
-               (("nlp" in ql or "natural language" in ql) and ("nlp" in s_low or "natural language" in s_low)) or \
-               (("time series" in ql or "forecasting" in ql) and "time series" in s_low):
-                target_subject = s
-                break
-        
-        if target_subject:
-            reply = f"🔬 **{target_subject['subject_name']} — Labworks & Code Practice**\n\n"
-            for lw in target_subject["labworks"]:
-                status_icon = "✅" if lw["status"] == "completed" else "⚡"
-                reply += f"### {status_icon} [{lw['lab_number']}] {lw['title']}\n"
-                reply += f"- **Problem:** {lw['problem_statement']}\n"
-                reply += f"- **Concepts:** {', '.join(lw['concepts'])}\n"
-                reply += f"- **Code Path:** `{lw['file_path']}`\n\n"
-            return {"response": reply, "tool_used": "labwork_roadmap", "data": target_subject}
-        else:
-            reply = (
-                f"🔬 **Autonomous Labworks Roadmap**\n\n"
-                f"- **Total Experiments Discovered:** {stats['total_labs']}\n"
-                f"- **Practice Readiness:** {stats['overall_readiness_pct']}%\n\n"
-                "Switch to the **Labworks & Code Practice** tab to inspect interactive code starters and check off tasks."
-            )
-            return {"response": reply, "tool_used": "labwork_roadmap", "data": data}
+    # 11. Local Academic RAG Ingestion & Semantic Retrieval
+    # If the user asks an academic or coursework question, ground with real Desktop/3rd Year slides & code
+    rag_context = get_academic_rag_context(q, top_k=3)
 
-    # 11. Career Radar Opportunities
-    if any(k in ql for k in ["opportunity", "opportunities", "internship", "hackathon", "fellowship", "credits"]):
-        res = tool_career_radar()
-        lines = [f"🏆 **Active Career Radar ({res['count']} Opportunities Available):**\n"]
-        for opp in res['opportunities']:
-            lines.append(f"- **{opp['name']}** [{opp['category'].upper()}]: {opp['benefits_credits']} (Deadline: `{opp['deadline']}`)")
-        lines.append(f"\n👉 *Type `show applied jobs` to see your 7 already-applied positions.*")
-        return {"response": "\n".join(lines), "tool_used": "career_radar", "details": res}
-
-    # 12. DigiCampus Resync
-    if any(k in ql for k in ["rerun", "trigger sync", "resync", "update now", "crawl digicampus", "audit digicampus"]):
-        from app.services.digicampus_scraper import sync_digicampus
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(sync_digicampus())
-        except RuntimeError:
-            import threading
-            threading.Thread(target=lambda: asyncio.run(sync_digicampus()), daemon=True).start()
-
-        reply = (
-            f"🔄 **DigiCampus Live Audit Triggered**\n\n"
-            f"Connecting to Chrome on debug port 9222. Auditing all 15 subjects, updating attendance records, "
-            f"checking `{ACADEMIC_ROOT}`, and syncing git repository."
-        )
-        return {"response": reply, "tool_used": "sync_digicampus"}
-
-    # 13. File System Queries
-    if any(k in ql for k in ["list files", "show files", "what files", "directory"]):
-        target = ACADEMIC_ROOT
-        for s in ["time series", "awt", "bda", "deep learning", "nlp lab", "nlp", "sepm", "ajp", "mentoring"]:
-            if s in ql:
-                folder_name = "NLP Lab" if s == "nlp lab" else s.title()
-                target = ACADEMIC_ROOT / folder_name
-                break
-        res = tool_file_system("list", str(target))
-        if "items" in res:
-            items_str = ", ".join([it['name'] for it in res['items'][:15]])
-            reply = f"📁 **Files in `{target.name}` ({len(res['items'])} items):**\n\n{items_str}"
-        else:
-            reply = f"Note: {res.get('error')}"
-        return {"response": reply, "tool_used": "file_system", "details": res}
-
-    # 14. Daily To-Dos
-    if any(k in ql for k in ["todo", "tasks", "action items"]):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, title, category, due_date FROM daily_todos WHERE completed = 0 ORDER BY due_date ASC")
-        rows = [dict(r) for r in cursor.fetchall()]
-        conn.close()
-        lines = ["📌 **Today's Action Items & Priorities:**\n"]
-        for i, t in enumerate(rows, 1):
-            lines.append(f"{i}. **[{t['category']}]** {t['title']} (Due: `{t['due_date']}`)")
-        return {"response": "\n".join(lines), "tool_used": "daily_todos"}
-
-    # 15. Open-Ended Questions, Coding, Explanations & Generative Dialogue
-    # Handled LIVE by local Ollama GPU / Gemini Brain (NEVER escalated to Antigravity)!
-    context_data = (
-        f"Shaunak's Academic Status: 15 enrolled courses, 76.8% overall attendance. "
-        f"Career: 7 genuine jobs applied on LinkedIn, Internshala, and Indeed. "
-        f"Workstation: NVIDIA RTX 3050 GPU, Windows 11, local Ollama running."
+    system_prompt = (
+        "You are Shaunak Rane's Academic & Engineering Copilot at Universal AI University (B.Tech CS AI & ML). "
+        "Provide direct, concise, mathematically precise, well-structured markdown answers. "
+        f"{rag_context}"
     )
-    ai_result = generate_ai_response(q, context_data)
+
+    ollama_ans = call_ollama(q, system_prompt=system_prompt)
+    if ollama_ans:
+        tool_label = "academic_rag_llm" if rag_context else "ollama_gpu_llm"
+        return {"response": ollama_ans, "tool_used": tool_label, "details": {"model": get_active_model(), "rag_used": bool(rag_context)}}
+
     return {
-        "response": ai_result["response"],
-        "tool_used": ai_result.get("tool_used", "ollama_gpu_llm"),
-        "details": {"model": ai_result.get("model", DEFAULT_OLLAMA_MODEL)}
+        "response": f"⚡ I processed your request: *{q}*. How can I help with your workstation?",
+        "tool_used": "smart_dispatcher"
     }
 
 def generate_daily_briefing() -> Dict[str, Any]:

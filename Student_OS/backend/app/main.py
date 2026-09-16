@@ -368,6 +368,16 @@ async def apply_single_opportunity(opp_id: int):
     })
     return {"status": "completed", "output": proc.stdout}
 
+from fastapi.responses import FileResponse
+
+@app.get("/api/screenshots/{filename}")
+async def get_screenshot(filename: str):
+    screenshot_dir = Path(__file__).resolve().parent.parent.parent.parent / "Auto Apply" / "logs" / "screenshots"
+    target_file = screenshot_dir / filename
+    if not target_file.exists():
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    return FileResponse(str(target_file))
+
 # ----------------- Daily Todos Endpoints -----------------
 @app.get("/api/todos")
 async def get_daily_todos():
@@ -446,13 +456,51 @@ async def get_logs(limit: int = 50):
     return logs
 
 # ----------------- Chatbot, Search & Briefing Endpoints -----------------
-from app.services.chatbot_engine import process_chat_query, generate_daily_briefing, global_search
+from fastapi.responses import StreamingResponse
+from app.services.chatbot_engine import process_chat_query, generate_daily_briefing, global_search, stream_ollama_tokens
 from app.services.academic_engine import calculate_attendance_metrics
+from app.services.rag_engine import get_academic_rag_context
+from app.services.notification_service import send_windows_notification
+from app.services.scheduler_service import workstation_daemon
 
 @app.post("/api/chat")
 async def chat_endpoint(payload: Dict[str, str]):
     query = payload.get("query", "")
     return process_chat_query(query)
+
+@app.get("/api/chat/stream")
+async def chat_stream_endpoint(q: str = ""):
+    rag_context = get_academic_rag_context(q, top_k=2)
+    system_prompt = (
+        "You are Shaunak Rane's Autonomous Student OS Copilot at Universal AI University. "
+        "Provide direct, concise, well-formatted markdown answers. "
+        f"{rag_context}"
+    )
+    def event_stream():
+        for token in stream_ollama_tokens(q, system_prompt):
+            yield f"data: {json.dumps({'token': token})}\n\n"
+        yield "data: [DONE]\n\n"
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.post("/api/notify")
+async def notify_endpoint(payload: Dict[str, str]):
+    title = payload.get("title", "Student OS Alert")
+    msg = payload.get("message", "")
+    success = send_windows_notification(title, msg)
+    return {"status": "success" if success else "failed"}
+
+@app.get("/api/daemon/status")
+async def daemon_status_endpoint():
+    return workstation_daemon.get_status()
+
+@app.post("/api/daemon/toggle")
+async def daemon_toggle_endpoint(payload: Dict[str, bool]):
+    enable = payload.get("enable", True)
+    if enable:
+        workstation_daemon.start()
+    else:
+        workstation_daemon.stop()
+    return workstation_daemon.get_status()
 
 @app.get("/api/briefing")
 async def briefing_endpoint():
