@@ -174,10 +174,9 @@ async def sync_digicampus(broadcast_fn: Optional[Callable] = None):
         # Automatic Git Commit & Push to https://github.com/Shaunakrane914/Automation
         try:
             repo_root = BACKEND_DIR.parent
-            subprocess.run(["git", "add", "Student_OS/backend/data", "Student_OS/backend/student_os.db"], cwd=repo_root, check=False)
-            status_check = subprocess.run(["git", "status", "--porcelain", "Student_OS/backend/data", "Student_OS/backend/student_os.db"], cwd=repo_root, capture_output=True, text=True)
-            if status_check.stdout.strip():
-                subprocess.run(["git", "commit", "-m", f"Auto-sync: updated DigiCampus academic audit ({timestamp})"], cwd=repo_root, check=False)
+            subprocess.run(["git", "add", "."], cwd=repo_root, capture_output=True, text=True)
+            r_commit = subprocess.run(["git", "commit", "-m", f"Auto-sync: updated DigiCampus academic audit ({timestamp})"], cwd=repo_root, capture_output=True, text=True)
+            if r_commit.returncode == 0:
                 push_res = subprocess.run(["git", "push", "origin", "main"], cwd=repo_root, capture_output=True, text=True)
                 if push_res.returncode == 0:
                     log_agent_event("INFO", "Git Auto-Push: Successfully pushed audit updates to GitHub.")
