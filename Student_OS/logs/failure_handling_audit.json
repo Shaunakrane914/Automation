@@ -1,0 +1,30 @@
+{
+  "test_a_digicampus_down": {
+    "vulnerability_identified": true,
+    "flaw": "In comprehensive_academic_sync.py line 52: [pg for pg in context.pages if 'digiicampus.com' in pg.url][0] raises IndexError if DigiCampus tab is not open",
+    "status": "FAIL \u2014 Code lacks fallback or error catch if DigiCampus tab is closed"
+  },
+  "test_b_cdp_unavailable": {
+    "handled": true,
+    "error_type": "Error",
+    "message": "BrowserType.connect_over_cdp: connect ECONNREFUSED 127.0.0.1:9998\nCall log:\n  - <ws preparing> retrieving websocket url ",
+    "status": "PASS (Graceful exception caught)"
+  },
+  "test_c_network_unavailable": {
+    "handled": true,
+    "error_type": "TypeError",
+    "status": "PASS (Network failure raises catchable urllib/http exception)"
+  },
+  "test_d_db_locked": {
+    "handled": true,
+    "error": "database is locked",
+    "status": "PASS (sqlite3.OperationalError: database is locked caught properly)"
+  },
+  "test_e_partial_subject_failure": {
+    "flaw_identified": true,
+    "description": "digicampus_scraper.py runs proc.wait() but does not check proc.returncode != 0. If 1 or more subjects fail or crawler crashes, it still loads stale digicampus_complete_audit.json and broadcasts SYNC_COMPLETED.",
+    "status": "FAIL \u2014 False positive completion on partial crawler crash"
+  },
+  "summary": {},
+  "overall_status": "PENDING"
+}
