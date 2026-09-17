@@ -253,9 +253,25 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState<string>('Live Synced (Sept 2026)');
 
   // Antigravity IDE Chat Hub states
-  const [antigravityChats, setAntigravityChats] = useState<AntigravityChatSummary[]>([]);
+  const [antigravityChats, setAntigravityChats] = useState<AntigravityChatSummary[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('student_os_cached_chats');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
   const [selectedChatId, setSelectedChatId] = useState<string>('4c862611-5a11-4b3c-bc77-b72ad2056302');
-  const [antigravityMessages, setAntigravityMessages] = useState<AntigravityMessage[]>([]);
+  const [antigravityMessages, setAntigravityMessages] = useState<AntigravityMessage[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('student_os_cached_msgs_4c862611-5a11-4b3c-bc77-b72ad2056302');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
   const [antigravityLoading, setAntigravityLoading] = useState<boolean>(false);
   const [antigravitySending, setAntigravitySending] = useState<boolean>(false);
   const [antigravityPromptInput, setAntigravityPromptInput] = useState<string>('');
@@ -300,6 +316,23 @@ export default function App() {
     }
     return 'http://10.0.18.180:8000';
   });
+  const activeServerUrlRef = React.useRef<string>(serverUrl);
+
+  const applyActiveBaseUrl = (url: string, mode: 'usb' | 'wifi' | 'global' = 'global') => {
+    activeServerUrlRef.current = url;
+    axios.defaults.baseURL = url;
+    setServerUrl(url);
+    setLaptopOnline(true);
+    setConnectionMode(mode);
+    try {
+      localStorage.setItem('student_os_server_url', url);
+    } catch {}
+  };
+
+  const getEffectiveBaseUrl = (override?: string): string => {
+    return override || activeServerUrlRef.current || axios.defaults.baseURL || serverUrl || 'http://localhost:8000';
+  };
+
   const [laptopOnline, setLaptopOnline] = useState<boolean>(true);
   const [connectionMode, setConnectionMode] = useState<'usb' | 'wifi' | 'global' | 'offline'>('usb');
   const [globalTunnelUrl, setGlobalTunnelUrl] = useState<string>('');
@@ -468,7 +501,7 @@ export default function App() {
 
   // Helper to fetch and monitor the active global Cloudflare tunnel
   const fetchGlobalTunnelStatus = async (baseUrl?: string) => {
-    const base = baseUrl || serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    const base = getEffectiveBaseUrl(baseUrl);
     try {
       const res = await axios.get(`${base}/api/global/tunnel-status`, { timeout: 3000 });
       if (res.data) {
@@ -486,17 +519,26 @@ export default function App() {
   const fetchFromCloudRelay = async (): Promise<string | null> => {
     setFetchingCloudRelay(true);
     try {
-      const res = await axios.get('https://ntfy.sh/shaunak_studentos_global_url_88f9a2/raw?poll=1', { timeout: 4000 });
+      const res = await axios.get('https://ntfy.sh/shaunak_studentos_global_url_88f9a2/raw?poll=1', { timeout: 6000 });
       if (res.data) {
-        let parsed: any = null;
-        try {
-          parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-        } catch {
-          if (typeof res.data === 'string' && res.data.startsWith('http')) parsed = { url: res.data.trim() };
-        }
-        if (parsed?.url && parsed.url.startsWith('http')) {
-          setGlobalTunnelUrl(parsed.url);
-          return parsed.url;
+        const rawStr = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+        const lines = rawStr.trim().split('\n');
+        // Iterate backwards from the latest message
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed?.url && parsed.url.startsWith('http')) {
+              setGlobalTunnelUrl(parsed.url);
+              return parsed.url;
+            }
+          } catch {
+            if (line.startsWith('http')) {
+              setGlobalTunnelUrl(line);
+              return line;
+            }
+          }
         }
       }
     } catch (e) {
@@ -507,76 +549,117 @@ export default function App() {
     return null;
   };
 
+  // Helper to trigger all data loads on the resolved base URL
+  const fetchAllData = (targetUrl: string) => {
+    fetchAntigravityChats(true, targetUrl);
+    fetchAcademicData();
+    fetchLabworks();
+    fetchCareerData();
+    fetchTodos();
+    fetchLogs();
+    fetchAutoApplyStatus();
+    fetchRemoteStatus();
+    fetchGlobalTunnelStatus(targetUrl);
+  };
+
   // Dynamic backend URL configuration & Laptop Reachability Auto-Discovery (USB -> Wi-Fi -> Worldwide Cloud)
-  useEffect(() => {
-    let isMounted = true;
-    const checkConnection = async () => {
-      const localCandidates = [
-        { url: serverUrl, mode: serverUrl.includes('trycloudflare') ? 'global' : serverUrl.includes('10.0.') ? 'wifi' : 'usb' },
-        { url: 'http://localhost:8000', mode: 'usb' },
-        { url: 'http://10.0.18.180:8000', mode: 'wifi' },
-        { url: 'http://127.0.0.1:8000', mode: 'usb' }
-      ];
+  const checkConnection = async (_forceDiscover = false): Promise<string | null> => {
+    const currentSaved = typeof window !== 'undefined' ? localStorage.getItem('student_os_server_url') || serverUrl : serverUrl;
+    const candidates = [
+      { url: currentSaved, mode: currentSaved.includes('trycloudflare') ? 'global' : currentSaved.includes('10.0.') ? 'wifi' : 'usb' },
+      { url: 'http://localhost:8000', mode: 'usb' },
+      { url: 'http://10.0.18.180:8000', mode: 'wifi' },
+      { url: 'http://127.0.0.1:8000', mode: 'usb' }
+    ].filter(c => c.url && c.url.trim().length > 0);
 
-      for (const candidate of localCandidates) {
-        if (!candidate.url) continue;
-        try {
-          const res = await axios.get(`${candidate.url}/api/mobile/status`, { timeout: 2000 });
-          if (res.data && res.data.status === 'online' && isMounted) {
-            axios.defaults.baseURL = candidate.url;
-            setServerUrl(candidate.url);
-            setLaptopOnline(true);
-            setConnectionMode(candidate.mode as any);
-            localStorage.setItem('student_os_server_url', candidate.url);
-            fetchAntigravityChats();
-            fetchAcademicData();
-            fetchLabworks();
-            fetchRemoteStatus();
-            fetchGlobalTunnelStatus(candidate.url);
-            return;
-          }
-        } catch (e) {
-          // continue
+    // Fast candidate prober
+    const probeCandidate = async (cand: { url: string; mode: string }) => {
+      try {
+        const res = await axios.get(`${cand.url}/api/mobile/status`, { timeout: 2500 });
+        if (res.data && res.data.status === 'online') {
+          return cand;
         }
+      } catch {
+        return null;
       }
-
-      // If local network not reachable, auto-discover Worldwide Cloud Tunnel!
-      const discoveredUrl = await fetchFromCloudRelay();
-      if (discoveredUrl && isMounted) {
-        try {
-          const testGlobal = await axios.get(`${discoveredUrl}/api/mobile/status`, { timeout: 4000 });
-          if (testGlobal.data && testGlobal.data.status === 'online' && isMounted) {
-            axios.defaults.baseURL = discoveredUrl;
-            setServerUrl(discoveredUrl);
-            setLaptopOnline(true);
-            setConnectionMode('global');
-            localStorage.setItem('student_os_server_url', discoveredUrl);
-            fetchAntigravityChats();
-            fetchAcademicData();
-            fetchLabworks();
-            fetchRemoteStatus();
-            fetchGlobalTunnelStatus(discoveredUrl);
-            return;
-          }
-        } catch (e) {
-          console.warn('Global tunnel verification failed:', e);
-        }
-      }
-
-      if (isMounted) {
-        setLaptopOnline(false);
-        setConnectionMode('offline');
-      }
+      return null;
     };
 
+    // Probe local candidates and cloud relay simultaneously
+    const probePromises = candidates.map(probeCandidate);
+    const cloudRelayPromise = fetchFromCloudRelay();
+
+    const probeResults = await Promise.all(probePromises);
+    const validCandidate = probeResults.find(r => r !== null);
+
+    if (validCandidate) {
+      applyActiveBaseUrl(validCandidate.url, validCandidate.mode as any);
+      fetchAllData(validCandidate.url);
+      return validCandidate.url;
+    }
+
+    // If local/saved endpoints are unreachable, verify cloud relay tunnel
+    const cloudUrl = await cloudRelayPromise;
+    if (cloudUrl) {
+      try {
+        const res = await axios.get(`${cloudUrl}/api/mobile/status`, { timeout: 4000 });
+        if (res.data && res.data.status === 'online') {
+          applyActiveBaseUrl(cloudUrl, 'global');
+          fetchAllData(cloudUrl);
+          return cloudUrl;
+        }
+      } catch (e) {
+        console.warn('Cloud tunnel verification failed:', e);
+      }
+    }
+
+    setLaptopOnline(false);
+    setConnectionMode('offline');
+    return null;
+  };
+
+  useEffect(() => {
     checkConnection();
-    return () => { isMounted = false; };
-  }, [serverUrl]);
+  }, []);
+
+  // Background heartbeat & auto-discovery timer (every 12 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const base = getEffectiveBaseUrl();
+      axios.get(`${base}/api/mobile/status`, { timeout: 3500 })
+        .then(res => {
+          if (res.data?.status === 'online') {
+            setLaptopOnline(true);
+          }
+        })
+        .catch(() => {
+          // If ping failed, try silent background discovery
+          fetchFromCloudRelay().then(url => {
+            if (url && url !== base) {
+              axios.get(`${url}/api/mobile/status`, { timeout: 3000 })
+                .then(res => {
+                  if (res.data?.status === 'online') {
+                    applyActiveBaseUrl(url, 'global');
+                    fetchAntigravityChats(false, url);
+                  }
+                })
+                .catch(() => {
+                  setLaptopOnline(false);
+                });
+            } else {
+              setLaptopOnline(false);
+            }
+          });
+        });
+    }, 12000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // On-demand manual sync with laptop workstation
   const syncWithLaptop = async () => {
     setMobileSyncing(true);
-    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    let base = getEffectiveBaseUrl();
     try {
       const res = await axios.get(`${base}/api/mobile/sync`, { timeout: 8000 });
       if (res.data) {
@@ -585,7 +668,7 @@ export default function App() {
         if (res.data.academic?.assignments) setAssignments(res.data.academic.assignments);
         if (res.data.career?.applications) setCareerItems(res.data.career.applications);
         setLastSyncTime(`Synced with Laptop (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`);
-        fetchAntigravityChats();
+        fetchAntigravityChats(true, base);
         fetchLabworks();
         fetchTodos();
         fetchLogs();
@@ -599,13 +682,11 @@ export default function App() {
         if (cloudUrl) {
           const altRes = await axios.get(`${cloudUrl}/api/mobile/sync`, { timeout: 6000 });
           if (altRes.data) {
-            axios.defaults.baseURL = cloudUrl;
-            setServerUrl(cloudUrl);
-            setLaptopOnline(true);
-            setConnectionMode('global');
+            applyActiveBaseUrl(cloudUrl, 'global');
+            base = cloudUrl;
             if (altRes.data.academic?.subjects) setSubjects(altRes.data.academic.subjects);
             if (altRes.data.academic?.assignments) setAssignments(altRes.data.academic.assignments);
-            fetchAntigravityChats();
+            fetchAntigravityChats(true, cloudUrl);
             fetchLabworks();
             fetchGlobalTunnelStatus(cloudUrl);
           }
@@ -620,7 +701,6 @@ export default function App() {
     }
   };
 
-
   // Fetch initial data (passive load, zero autorun)
   useEffect(() => {
     fetchAcademicData();
@@ -633,16 +713,22 @@ export default function App() {
     fetchAntigravityChats(true);
   }, []);
 
-  const fetchAntigravityChats = async (initialLoad = false) => {
-    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+  const fetchAntigravityChats = async (initialLoad = false, targetBaseUrl?: string) => {
+    const base = getEffectiveBaseUrl(targetBaseUrl);
     try {
-      const res = await axios.get(`${base}/api/antigravity/chats`);
+      const res = await axios.get(`${base}/api/antigravity/chats`, { timeout: 6000 });
       if (res.data && Array.isArray(res.data)) {
         setAntigravityChats(res.data);
-        if (initialLoad && res.data.length > 0) {
+        setLaptopOnline(true);
+        try {
+          localStorage.setItem('student_os_cached_chats', JSON.stringify(res.data));
+        } catch {}
+        if (res.data.length > 0) {
           const current = res.data.find(c => c.is_current) || res.data[0];
-          setSelectedChatId(current.id);
-          fetchChatMessages(current.id);
+          if (initialLoad || !selectedChatId) {
+            setSelectedChatId(current.id);
+            fetchChatMessages(current.id, base);
+          }
         }
       }
     } catch (err) {
@@ -650,19 +736,26 @@ export default function App() {
     }
   };
 
-  const fetchChatMessages = async (convId: string) => {
-    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+  const fetchChatMessages = async (convId: string, targetBaseUrl?: string) => {
+    const base = getEffectiveBaseUrl(targetBaseUrl);
     setAntigravityLoading(true);
     try {
-      const res = await axios.get(`${base}/api/antigravity/chats/${convId}/messages?limit=60`);
+      const res = await axios.get(`${base}/api/antigravity/chats/${convId}/messages?limit=60`, { timeout: 8000 });
       if (res.data && Array.isArray(res.data)) {
         setAntigravityMessages(res.data);
+        try {
+          localStorage.setItem(`student_os_cached_msgs_${convId}`, JSON.stringify(res.data));
+        } catch {}
         setTimeout(() => {
           antigravityChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 150);
       }
     } catch (err) {
       console.error(`Failed to fetch messages for ${convId}:`, err);
+      try {
+        const cached = localStorage.getItem(`student_os_cached_msgs_${convId}`);
+        if (cached) setAntigravityMessages(JSON.parse(cached));
+      } catch {}
     } finally {
       setAntigravityLoading(false);
     }
@@ -678,7 +771,7 @@ export default function App() {
     const promptToSend = customPrompt || antigravityPromptInput.trim();
     if (!promptToSend || !selectedChatId || antigravitySending) return;
 
-    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    let base = getEffectiveBaseUrl();
 
     // Optimistically add user prompt to transcript
     const userMsg: AntigravityMessage = {
@@ -692,11 +785,26 @@ export default function App() {
     setAntigravitySending(true);
 
     try {
-      const res = await axios.post(`${base}/api/antigravity/chats/${selectedChatId}/prompt`, {
-        prompt: promptToSend
-      });
+      let res;
+      try {
+        res = await axios.post(`${base}/api/antigravity/chats/${selectedChatId}/prompt`, {
+          prompt: promptToSend
+        }, { timeout: 15000 });
+      } catch (firstErr) {
+        console.warn('Initial prompt post failed, re-discovering cloud tunnel and retrying...', firstErr);
+        const discovered = await fetchFromCloudRelay();
+        if (discovered) {
+          applyActiveBaseUrl(discovered, 'global');
+          base = discovered;
+          res = await axios.post(`${base}/api/antigravity/chats/${selectedChatId}/prompt`, {
+            prompt: promptToSend
+          }, { timeout: 15000 });
+        } else {
+          throw firstErr;
+        }
+      }
 
-      if (res.data && res.data.reply) {
+      if (res?.data && res.data.reply) {
         const assistantMsg: AntigravityMessage = {
           id: `a_${Date.now()}`,
           sender: 'assistant',
@@ -704,6 +812,7 @@ export default function App() {
           timestamp: res.data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setAntigravityMessages(prev => [...prev, assistantMsg]);
+        setLaptopOnline(true);
         if (res.data.directive_file) {
           setLastDirectiveInfo({
             file: res.data.directive_file,
@@ -712,7 +821,7 @@ export default function App() {
         }
       }
       // Re-fetch chat summary list to update timestamps & counts
-      fetchAntigravityChats();
+      fetchAntigravityChats(false, base);
     } catch (err: any) {
       const errMsg: AntigravityMessage = {
         id: `err_${Date.now()}`,
@@ -1252,7 +1361,14 @@ export default function App() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  if (tab.id === 'antigravity') {
+                    const base = getEffectiveBaseUrl();
+                    fetchAntigravityChats(false, base);
+                    if (selectedChatId) fetchChatMessages(selectedChatId, base);
+                  }
+                }}
                 className={`flex items-center space-x-2 py-2.5 px-3.5 text-xs font-medium border-b-2 transition whitespace-nowrap ${
                   isActive
                     ? 'border-amber-500 text-amber-400 bg-zinc-800/40 font-semibold'
@@ -2862,7 +2978,16 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => fetchAntigravityChats()}
+                  onClick={async () => {
+                    setAntigravityLoading(true);
+                    const discovered = await checkConnection(true);
+                    const activeBase = discovered || getEffectiveBaseUrl();
+                    await fetchAntigravityChats(false, activeBase);
+                    if (selectedChatId) {
+                      await fetchChatMessages(selectedChatId, activeBase);
+                    }
+                    setAntigravityLoading(false);
+                  }}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition flex items-center space-x-1.5 shadow"
                   title="Reload all offline chats from laptop"
                 >
@@ -3002,7 +3127,10 @@ export default function App() {
 
                   <div className="flex items-center space-x-1.5">
                     <button
-                      onClick={() => fetchChatMessages(selectedChatId)}
+                      onClick={() => {
+                        fetchAntigravityChats(true);
+                        if (selectedChatId) fetchChatMessages(selectedChatId);
+                      }}
                       className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition"
                       title="Reload transcript"
                     >
@@ -3642,6 +3770,13 @@ export default function App() {
               key={tab.id}
               onClick={() => {
                 setActiveTab(tab.id as any);
+                if (tab.id === 'antigravity') {
+                  const base = getEffectiveBaseUrl();
+                  fetchAntigravityChats(false, base);
+                  if (selectedChatId) {
+                    fetchChatMessages(selectedChatId, base);
+                  }
+                }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg transition relative ${
