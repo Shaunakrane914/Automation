@@ -165,10 +165,12 @@ def append_to_transcript(conversation_id: str, prompt: str, reply: str):
 
 def execute_chat_prompt_on_workstation(conversation_id: str, prompt: str) -> Dict[str, Any]:
     """
-    Executes a coding prompt from mobile on the laptop workstation codebase.
-    Uses Gemini API on the laptop to generate code/solutions, runs terminal commands if needed,
-    updates local files, and records the conversation update locally.
+    Acts as the direct remote control execution engine for Shaunak's laptop workstation codebase.
+    Directly executes Git commands, shell/PowerShell tools, file operations, test runners,
+    app launchers, and contextual AI reasoning from mobile.
     """
+    import re
+
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     directive_file = PROMPTS_DIR / f"mobile_directive_{timestamp_str}.md"
     latest_file = PROMPTS_DIR / "latest_active_directive.md"
@@ -195,14 +197,60 @@ Execute this prompt on the laptop codebase ({WORKSPACE_ROOT}).
     except Exception:
         pass
 
+    clean_p = prompt.strip()
+    lower_p = clean_p.lower()
     reply = ""
 
-    # Check for direct terminal commands (e.g. run git status, exec dir, ps ...)
-    lower_p = prompt.strip().lower()
-    if lower_p.startswith(("run ", "exec ", "cmd ", "ps ", "powershell ")):
-        cmd = prompt.strip().split(" ", 1)[1]
+    # Fetch recent history so we have conversational context (e.g. if user says "you do it" or "push it")
+    recent_messages = get_chat_messages(conversation_id, max_messages=8)
+    last_assistant_text = ""
+    for msg in reversed(recent_messages):
+        if msg.get("sender") == "assistant":
+            last_assistant_text = msg.get("text", "")
+            break
+
+    # 1. ACTION: Direct "You do it" / "do it" / "run it" / "apply it"
+    if lower_p in ["you do it", "do it", "run it", "execute it", "apply it", "push it", "do that", "please do it"]:
+        if "git add" in last_assistant_text or "git push" in last_assistant_text or "git commit" in last_assistant_text or "git" in last_assistant_text.lower():
+            # Run full git commit & push
+            cmd = 'git add . ; git commit -m "update from mobile remote control" ; git push origin main'
+            res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=25)
+            out = (res.stdout.strip() + "\n" + res.stderr.strip()).strip()
+            reply = f"⚡ **Autonomous Workstation Action Executed: Git Push**\n\n```powershell\n{out or 'Code committed and pushed to remote main branch.'}\n```\n\n*Exit Code:* `{res.returncode}` • *Workspace:* `{WORKSPACE_ROOT}`"
+        else:
+            # Look for code blocks in the previous assistant message
+            code_blocks = re.findall(r'```(?:powershell|bash|sh|cmd)?\s*\n(.*?)```', last_assistant_text, re.DOTALL)
+            if code_blocks:
+                extracted_cmd = code_blocks[0].strip()
+                res = subprocess.run(["powershell", "-Command", extracted_cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=30)
+                reply = f"⚡ **Autonomous Action Executed on Laptop Workstation (`{extracted_cmd}`)**\n\n```powershell\n{res.stdout.strip() or 'Command executed successfully.'}\n```\n"
+                if res.stderr.strip():
+                    reply += f"\n**Stderr:**\n```powershell\n{res.stderr.strip()}\n```\n"
+                reply += f"\n*Exit Code:* `{res.returncode}`"
+
+    # 2. ACTION: Git operations (e.g. push current code, git push, commit and push)
+    if not reply and any(k in lower_p for k in ["push current code", "push code", "push to git", "git push", "git commit", "commit and push", "stage and push"]):
+        commit_msg = "update from mobile remote controller"
+        if "message" in lower_p or "-m" in lower_p:
+            parts = clean_p.split("message", 1)
+            if len(parts) > 1:
+                commit_msg = parts[1].strip(" :\"'")
+        cmd = f'git status ; git add . ; git commit -m "{commit_msg}" ; git push origin main'
+        res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=25)
+        out = (res.stdout.strip() + "\n" + res.stderr.strip()).strip()
+        reply = f"⚡ **Git Push Executed on Laptop Workstation**\n\n```powershell\n{out}\n```\n\n*Branch:* `main` • *Exit Code:* `{res.returncode}`"
+
+    # 3. ACTION: Git Status / Git Diff / Git Log
+    if not reply and lower_p in ["git status", "status", "check git status", "check git", "git diff", "git log"]:
+        cmd = "git status" if "diff" not in lower_p and "log" not in lower_p else ("git diff" if "diff" in lower_p else "git log -n 5")
+        res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=15)
+        reply = f"⚡ **`{cmd}` on Workstation (`{WORKSPACE_ROOT}`)**\n\n```powershell\n{res.stdout.strip() or res.stderr.strip()}\n```"
+
+    # 4. ACTION: Direct Terminal & PowerShell commands
+    if not reply and lower_p.startswith(("run ", "exec ", "cmd ", "ps ", "powershell ")):
+        cmd = clean_p.split(" ", 1)[1]
         try:
-            res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=20)
+            res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=30)
             stdout = res.stdout.strip()
             stderr = res.stderr.strip()
             reply = f"⚡ **Executed on Laptop Terminal (`{cmd}`)**\n\n"
@@ -214,27 +262,53 @@ Execute this prompt on the laptop codebase ({WORKSPACE_ROOT}).
         except Exception as e:
             reply = f"⚠️ **Command execution failed:** {e}"
 
+    # 5. ACTION: Build & Tests
+    if not reply and lower_p in ["npm build", "build frontend", "run build", "build apk", "gradle build", "run tests", "pytest"]:
+        if "apk" in lower_p or "gradle" in lower_p:
+            cmd = r"cd Student_OS\frontend\android ; .\gradlew.bat assembleRelease"
+        elif "frontend" in lower_p or "npm" in lower_p or "build" in lower_p:
+            cmd = r"cd Student_OS\frontend ; npm run build"
+        else:
+            cmd = "pytest"
+        res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=40)
+        reply = f"⚡ **Build & Execution on Workstation (`{cmd}`)**\n\n```powershell\n{res.stdout.strip() or res.stderr.strip()}\n```\n*Exit Code:* `{res.returncode}`"
+
+    # 6. ACTION: Desktop App Launching
+    if not reply and any(lower_p.startswith(pfx) for pfx in ["open ", "launch ", "start "]):
+        target = lower_p.split(" ", 1)[1].strip()
+        if "vs code" in target or "code" in target:
+            subprocess.Popen(["code", str(WORKSPACE_ROOT)], shell=True)
+            reply = f"⚡ **Launched VS Code** on laptop with workspace `{WORKSPACE_ROOT}`."
+        elif "chrome" in target or "browser" in target:
+            subprocess.Popen(["start", "chrome"], shell=True)
+            reply = "⚡ **Launched Google Chrome** on laptop."
+        elif "terminal" in target or "powershell" in target:
+            subprocess.Popen(["start", "powershell", "-NoExit", "-Command", f"Set-Location '{WORKSPACE_ROOT}'"], shell=True)
+            reply = f"⚡ **Launched PowerShell Terminal** at `{WORKSPACE_ROOT}`."
+        elif "antigravity" in target or "ide" in target:
+            subprocess.Popen([r"C:\Users\Shaunak Rane\AppData\Local\Programs\Antigravity\Antigravity.exe", str(WORKSPACE_ROOT)], shell=True)
+            reply = "⚡ **Spawned Google Antigravity IDE** on laptop."
+
+    # 7. General AI Reasoning & Tool Synthesis (Gemini + Local GPU)
     if not reply:
-        # Generate full code execution response with Gemini on laptop
         system_instruction = (
-            f"You are Antigravity Autonomous Coding Assistant running on Shaunak Rane's laptop workstation at {WORKSPACE_ROOT}. "
-            f"Shaunak is controlling you from his mobile phone. "
-            f"Provide complete, production-ready code, file modifications, terminal instructions, or explanations. "
-            f"Format your response in clean GitHub Markdown with syntax highlighted code blocks."
+            f"You are Antigravity Autonomous Agent Remote Controller operating directly on Shaunak Rane's laptop workstation ({WORKSPACE_ROOT}). "
+            f"Shaunak is interacting via his mobile phone to control this exact workstation. "
+            f"Be decisive, technical, and action-oriented. Provide direct terminal commands or code ready for execution. "
+            f"When you suggest PowerShell/terminal actions, provide them clearly in fenced code blocks so the remote control can execute them if commanded."
         )
 
         reply = generate_gemini_response(
             prompt=prompt,
             system_prompt=system_instruction,
-            history=[]
+            history=recent_messages
         )
 
     if not reply:
         reply = (
-            f"⚡ **Directive Queued on Laptop Workstation**\n\n"
-            f"Your coding prompt has been synchronized to `{latest_file}` and copied to your laptop clipboard.\n\n"
-            f"```markdown\n{prompt}\n```\n\n"
-            f"You can execute this immediately in Antigravity IDE on your PC."
+            f"⚡ **Directive Synced to Laptop Workstation**\n\n"
+            f"Your command has been written to `{latest_file}` and copied to Windows clipboard.\n\n"
+            f"```markdown\n{prompt}\n```"
         )
 
     # Persist directly into the Antigravity conversation transcript
