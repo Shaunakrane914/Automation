@@ -117,6 +117,52 @@ def get_chat_messages(conversation_id: str, max_messages: int = 40) -> List[Dict
     # Return the most recent max_messages
     return messages[-max_messages:] if len(messages) > max_messages else messages
 
+def append_to_transcript(conversation_id: str, prompt: str, reply: str):
+    """
+    Appends the user prompt and assistant response into the local Antigravity brain transcript.jsonl.
+    """
+    transcript_path = BRAIN_DIR / conversation_id / ".system_generated" / "logs" / "transcript.jsonl"
+    try:
+        transcript_path.parent.mkdir(parents=True, exist_ok=True)
+        last_step_index = 0
+        if transcript_path.exists():
+            try:
+                with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        try:
+                            data = json.loads(line)
+                            idx = data.get("step_index", 0)
+                            if isinstance(idx, int) and idx > last_step_index:
+                                last_step_index = idx
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+        user_entry = {
+            "step_index": last_step_index + 1,
+            "source": "USER_EXPLICIT",
+            "type": "USER_INPUT",
+            "status": "DONE",
+            "created_at": now_iso,
+            "content": f"<USER_REQUEST>\n{prompt}\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\n[Source: Mobile Workstation Controller]\n</ADDITIONAL_METADATA>"
+        }
+        assistant_entry = {
+            "step_index": last_step_index + 2,
+            "source": "MODEL",
+            "type": "PLANNER_RESPONSE",
+            "status": "DONE",
+            "created_at": now_iso,
+            "content": reply
+        }
+
+        with open(transcript_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(user_entry) + "\n")
+            f.write(json.dumps(assistant_entry) + "\n")
+    except Exception as e:
+        print(f"Failed to append to transcript for {conversation_id}: {e}")
+
 def execute_chat_prompt_on_workstation(conversation_id: str, prompt: str) -> Dict[str, Any]:
     """
     Executes a coding prompt from mobile on the laptop workstation codebase.
@@ -149,23 +195,39 @@ Execute this prompt on the laptop codebase ({WORKSPACE_ROOT}).
     except Exception:
         pass
 
-    # Generate full code execution response with Gemini 1.5 Flash on laptop
-    system_instruction = (
-        f"You are Antigravity Autonomous Coding Copilot executing on Shaunak Rane's laptop workstation at {WORKSPACE_ROOT}. "
-        f"Shaunak is controlling you from his mobile phone. "
-        f"Provide complete, production-ready code, file modifications, terminal instructions, or explanations. "
-        f"Format your response in clean GitHub Markdown with syntax highlighted code blocks."
-    )
+    reply = ""
 
-    history = [
-        {"role": "user", "parts": [prompt]}
-    ]
+    # Check for direct terminal commands (e.g. run git status, exec dir, ps ...)
+    lower_p = prompt.strip().lower()
+    if lower_p.startswith(("run ", "exec ", "cmd ", "ps ", "powershell ")):
+        cmd = prompt.strip().split(" ", 1)[1]
+        try:
+            res = subprocess.run(["powershell", "-Command", cmd], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=20)
+            stdout = res.stdout.strip()
+            stderr = res.stderr.strip()
+            reply = f"⚡ **Executed on Laptop Terminal (`{cmd}`)**\n\n"
+            if stdout:
+                reply += f"```powershell\n{stdout}\n```\n"
+            if stderr:
+                reply += f"\n**Stderr:**\n```powershell\n{stderr}\n```\n"
+            reply += f"\n*Exit Code:* `{res.returncode}` • *Workspace:* `{WORKSPACE_ROOT}`"
+        except Exception as e:
+            reply = f"⚠️ **Command execution failed:** {e}"
 
-    reply = generate_gemini_response(
-        prompt=prompt,
-        system_prompt=system_instruction,
-        history=[]
-    )
+    if not reply:
+        # Generate full code execution response with Gemini on laptop
+        system_instruction = (
+            f"You are Antigravity Autonomous Coding Assistant running on Shaunak Rane's laptop workstation at {WORKSPACE_ROOT}. "
+            f"Shaunak is controlling you from his mobile phone. "
+            f"Provide complete, production-ready code, file modifications, terminal instructions, or explanations. "
+            f"Format your response in clean GitHub Markdown with syntax highlighted code blocks."
+        )
+
+        reply = generate_gemini_response(
+            prompt=prompt,
+            system_prompt=system_instruction,
+            history=[]
+        )
 
     if not reply:
         reply = (
@@ -174,6 +236,9 @@ Execute this prompt on the laptop codebase ({WORKSPACE_ROOT}).
             f"```markdown\n{prompt}\n```\n\n"
             f"You can execute this immediately in Antigravity IDE on your PC."
         )
+
+    # Persist directly into the Antigravity conversation transcript
+    append_to_transcript(conversation_id, prompt, reply)
 
     return {
         "success": True,

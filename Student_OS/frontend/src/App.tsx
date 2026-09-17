@@ -630,16 +630,16 @@ export default function App() {
     fetchLogs();
     fetchAutoApplyStatus();
     fetchRemoteStatus();
-    fetchAntigravityChats();
+    fetchAntigravityChats(true);
   }, []);
 
-  const fetchAntigravityChats = async () => {
+  const fetchAntigravityChats = async (initialLoad = false) => {
     const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
     try {
       const res = await axios.get(`${base}/api/antigravity/chats`);
       if (res.data && Array.isArray(res.data)) {
         setAntigravityChats(res.data);
-        if (res.data.length > 0) {
+        if (initialLoad && res.data.length > 0) {
           const current = res.data.find(c => c.is_current) || res.data[0];
           setSelectedChatId(current.id);
           fetchChatMessages(current.id);

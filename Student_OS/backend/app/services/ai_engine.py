@@ -161,31 +161,32 @@ def generate_gemini_response(prompt: str, system_prompt: str = "", history: Opti
     """
     # Try Gemini REST API directly with requests
     if settings.GEMINI_API_KEY:
-        try:
-            import requests
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
-            contents = []
-            if system_prompt:
-                contents.append({"role": "user", "parts": [{"text": f"System Directive: {system_prompt}"}]})
-                contents.append({"role": "model", "parts": [{"text": "Understood. I will execute instructions accordingly."}]})
-            if history:
-                for msg in history[-6:]:
-                    role = "user" if msg.get("sender") == "user" else "model"
-                    text = msg.get("text", "")
-                    if text:
-                        contents.append({"role": role, "parts": [{"text": text}]})
-            contents.append({"role": "user", "parts": [{"text": prompt}]})
+        for model_name in ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]:
+            try:
+                import requests
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={settings.GEMINI_API_KEY}"
+                contents = []
+                if system_prompt:
+                    contents.append({"role": "user", "parts": [{"text": f"System Directive: {system_prompt}"}]})
+                    contents.append({"role": "model", "parts": [{"text": "Understood. I will execute instructions accordingly."}]})
+                if history:
+                    for msg in history[-6:]:
+                        role = "user" if msg.get("sender") == "user" else "model"
+                        text = msg.get("text", "")
+                        if text:
+                            contents.append({"role": role, "parts": [{"text": text}]})
+                contents.append({"role": "user", "parts": [{"text": prompt}]})
 
-            resp = requests.post(url, json={"contents": contents}, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    if parts:
-                        return parts[0].get("text", "").strip()
-        except Exception as e:
-            logger.warning(f"Direct Gemini REST call failed: {e}")
+                resp = requests.post(url, json={"contents": contents}, timeout=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            return parts[0].get("text", "").strip()
+            except Exception as e:
+                logger.warning(f"Direct Gemini REST call with {model_name} failed: {e}")
 
     # Fallback to local Ollama on laptop GPU
     try:
