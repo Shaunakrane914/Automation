@@ -1,0 +1,76 @@
+TOOL: labworks_curriculum_inspector
+
+🔬 **DigiCampus & Workstation Labworks: Advance Java (5 Experiments)**
+
+Here is the complete verified list of lab practicals from DigiCampus and your `Desktop/3rd Year` workspace, along with your structured practice to-do checklist:
+
+### Exp 1: Dynamic Data Structures: Java Collection Framework (ArrayList & LinkedList)
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `ArrayList1.class`
+- **Objective:** Implement dynamic data structures using Java's ArrayList and LinkedList. Evaluate insertion, deletion, index-based element replacement (.set), and iterator performance.
+- **Practice Tasks:**
+  - [ ] Declare and instantiate generic ArrayList<String> in Java. `[Instantiation]`
+  - [ ] Append elements using list.add("A") and list.add("B"). `[Insertion]`
+  - [ ] Traverse list using index loop (i = 0; i < list.size(); i++) with list.get(i). `[Traversal]`
+  - [ ] Update element at index 1 using list.set(1, "C"). `[Mutation]`
+  - [ ] Compare time complexities of ArrayList vs LinkedList for random access and insertions. `[Analysis]`
+
+### Exp 2: Functional Programming & Java 8 Lambda Expressions
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `LambdaFunctions.pdf`
+- **Objective:** Write concise, expressive Java code using Java 8 Lambda expressions and Functional Interfaces. Implement custom calculators and filter collections using Streams.
+- **Practice Tasks:**
+  - [ ] Define custom @FunctionalInterface MathOperation with method int operate(int a, int b). `[Interface]`
+  - [ ] Implement addition and multiplication operations using lambda expressions: (a, b) -> a + b. `[Lambda]`
+  - [ ] Use java.util.function.Predicate<T> to filter numbers. `[Predicate]`
+  - [ ] Filter and collect lists using Java 8 Streams: list.stream().filter(...).collect(...). `[Streams]`
+
+### Exp 3: JDBC Database Connectivity & Swing GUI Integration
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `DBConnect.class`
+- **Objective:** Build an end-to-end desktop GUI application integrating NetBeans Swing and MySQL database. Connect via JDBC, execute parameterized queries, and display student records.
+- **Practice Tasks:**
+  - [ ] Configure MySQL connection string: jdbc:mysql://127.0.0.1:3306/ajpa?serverTimezone=UTC. `[Configuration]`
+  - [ ] Write DBConnect.dbCon() method returning java.sql.Connection instance. `[Connection]`
+  - [ ] Construct PreparedStatement with parameterized query: INSERT INTO student VALUES (?, ?, ?). `[PreparedStatement]`
+  - [ ] Execute query with statement.executeUpdate() and catch SQLExceptions. `[Execution]`
+  - [ ] Fetch records via ResultSet and populate Swing JTextField / JTable components. `[GUI Binding]`
+
+### Exp 4: Desktop GUI Forms & Multi-Document Interface (Swing & NetBeans Form)
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `StudentMDI.class`
+- **Objective:** Develop an interactive Swing desktop GUI application featuring a master MDI container (StudentMDI), modal student registration dialogs, search forms, and event-driven data binding.
+- **Practice Tasks:**
+  - [ ] Create JDesktopPane container within a parent JFrame. `[MDI Layout]`
+  - [ ] Design JInternalFrame registration form with JTextField and JComboBox. `[GUI Form]`
+  - [ ] Bind ActionListener to Submit button to collect and validate input fields. `[Event Handling]`
+  - [ ] Pass form inputs to DBConnect PreparedStatement for database insertion. `[DB Integration]`
+  - [ ] Implement SearchStudent lookup frame updating dynamic status labels. `[Form Interaction]`
+
+### Exp 5: Java Servlets: Web Application Request-Response Lifecycle & HTTP Handling
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `AJP_MidTerm_Question_Bank.pdf`
+- **Objective:** Build server-side Java web components using Servlets. Handle client HTTP GET and POST requests, process query parameters, maintain user state via HttpSession, and dispatch responses.
+- **Practice Tasks:**
+  - [ ] Extend HttpServlet and override doGet(HttpServletRequest, HttpServletResponse) and doPost(). `[Servlet API]`
+  - [ ] Configure servlet mapping using @WebServlet('/student') annotation or web.xml deployment descriptor. `[Routing]`
+  - [ ] Extract form submission parameters using request.getParameter('studentId'). `[Request Processing]`
+  - [ ] Store and retrieve session attributes using request.getSession().setAttribute('user', user). `[Session Management]`
+  - [ ] Forward processed request to view via RequestDispatcher.forward(request, response). `[Dispatching]`
+
+### 📋 Practice To-Do Action Items:
+1. Exp 1 (Instantiation): Declare and instantiate generic ArrayList<String> in Java.
+2. Exp 1 (Insertion): Append elements using list.add("A") and list.add("B").
+3. Exp 1 (Traversal): Traverse list using index loop (i = 0; i < list.size(); i++) with list.get(i).
+4. Exp 1 (Mutation): Update element at index 1 using list.set(1, "C").
+5. Exp 1 (Analysis): Compare time complexities of ArrayList vs LinkedList for random access and insertions.
+6. Exp 2 (Interface): Define custom @FunctionalInterface MathOperation with method int operate(int a, int b).
+7. Exp 2 (Lambda): Implement addition and multiplication operations using lambda expressions: (a, b) -> a + b.
+8. Exp 2 (Predicate): Use java.util.function.Predicate<T> to filter numbers.
+9. Exp 2 (Streams): Filter and collect lists using Java 8 Streams: list.stream().filter(...).collect(...).
+10. Exp 3 (Configuration): Configure MySQL connection string: jdbc:mysql://127.0.0.1:3306/ajpa?serverTimezone=UTC.
+11. Exp 3 (Connection): Write DBConnect.dbCon() method returning java.sql.Connection instance.
+12. Exp 3 (PreparedStatement): Construct PreparedStatement with parameterized query: INSERT INTO student VALUES (?, ?, ?).
+... and 12 more practice tasks available in the Labworks & Code Practice tab.
+
+💡 *You can also view full starter code, test suites, and toggle completed tasks in the **Labworks & Code Practice** tab.*

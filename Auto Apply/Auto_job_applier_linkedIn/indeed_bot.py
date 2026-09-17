@@ -40,7 +40,7 @@ SEARCH_KEYWORDS = [
     "Deep Learning Intern",
 ]
 
-LOCATIONS   = ["Mumbai District", "Thane", "Navi Mumbai"]
+LOCATIONS   = ["Remote"]
 DATE_POSTED = "7"   # last N days
 
 # ── Whitelist: title must contain at least one ──
@@ -145,16 +145,26 @@ class IndeedBot:
     def setup_driver(self):
         log("🚀 Starting Chrome driver...")
         # 1. First priority: Check if Chrome is active on port 9222 with existing login session
+        import socket
+        port_open = False
         try:
-            from selenium.webdriver.chrome.options import Options as SelOptions
-            opts = SelOptions()
-            opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
-            self.driver = webdriver.Chrome(options=opts)
-            self.wait = WebDriverWait(self.driver, 15)
-            log("✅ Connected to active Chrome session on 127.0.0.1:9222!")
-            return
-        except Exception as cdp_err:
-            log(f"  CDP session note: {cdp_err}. Initializing local browser...")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.3)
+                port_open = (s.connect_ex(('127.0.0.1', 9222)) == 0)
+        except Exception:
+            pass
+
+        if port_open:
+            try:
+                from selenium.webdriver.chrome.options import Options as SelOptions
+                opts = SelOptions()
+                opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+                self.driver = webdriver.Chrome(options=opts)
+                self.wait = WebDriverWait(self.driver, 15)
+                log("✅ Connected to active Chrome session on 127.0.0.1:9222!")
+                return
+            except Exception as cdp_err:
+                log(f"  CDP session note: {cdp_err}. Initializing local browser...")
 
         profile_dir = os.path.join(os.path.dirname(__file__), "chrome_profile_indeed_2")
         fallback_profile = tempfile.mkdtemp(prefix="indeed_uc_")
@@ -169,10 +179,21 @@ class IndeedBot:
                 opts.add_argument("--start-maximized")
                 opts.add_argument("--no-sandbox")
                 opts.add_argument("--disable-dev-shm-usage")
-                self.driver = uc.Chrome(options=opts)
+                v_main = 153
+                try:
+                    import subprocess
+                    out = subprocess.check_output(
+                        r'powershell -Command "(Get-Item ''C:\Program Files\Google\Chrome\Application\chrome.exe'').VersionInfo.ProductVersion"',
+                        text=True
+                    ).strip()
+                    if out and "." in out:
+                        v_main = int(out.split(".")[0])
+                except Exception:
+                    pass
+                self.driver = uc.Chrome(options=opts, version_main=v_main)
                 self.wait = WebDriverWait(self.driver, 15)
                 mode = "saved profile" if pdir == profile_dir else ("temp profile" if pdir else "default profile")
-                log(f"✅ Chrome ready! ({mode})")
+                log(f"✅ Chrome ready! ({mode}, v{v_main})")
                 return
             except Exception as e:
                 last_error = e
@@ -376,6 +397,17 @@ class IndeedBot:
                         cov.send_keys(COVER_NOTE.format(company=company))
                         log("  ✍️  Cover note filled")
                 except NoSuchElementException:
+                    pass
+
+                # Upload latest resume if file input is presented
+                try:
+                    file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+                    for fi in file_inputs:
+                        resume_p = r"C:\Users\Shaunak Rane\Desktop\Projects\Portfolio\Shaunak_Rane_Resume.pdf"
+                        if os.path.exists(resume_p):
+                            fi.send_keys(resume_p)
+                            log(f"  📎 Attached latest resume: {os.path.basename(resume_p)}")
+                except Exception:
                     pass
 
                 # Click Submit / Continue / Next

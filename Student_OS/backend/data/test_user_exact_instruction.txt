@@ -1,0 +1,264 @@
+TOOL USED: labworks_curriculum_inspector
+
+🔬 **DigiCampus & Workstation Labworks: 3rd Year Curriculum (22 Experiments)**
+
+Here is the complete verified list of lab practicals from DigiCampus and your `Desktop/3rd Year` workspace, along with your structured practice to-do checklist:
+
+### Exp 1: Text Preprocessing Pipeline (IMDB Cleaning)
+- **Course:** `Natural Language Processing`
+- **Local File:** `Exp1_text_preprocessing.ipynb`
+- **Objective:** Construct a production-grade NLP text cleaning pipeline for IMDB movie reviews. Expand contractions, strip HTML tags and URLs with regular expressions, eliminate stopwords, and apply WordNet lemmatization.
+- **Practice Tasks:**
+  - [ ] Load IMDB Dataset CSV into Pandas DataFrame and inspect raw text samples. `[Data]`
+  - [ ] Implement lowercasing and contractions.fix() to expand colloquial short forms. `[Cleaning]`
+  - [ ] Write regex expressions to strip HTML tags (<.*?>) and HTTP/HTTPS hyperlinks. `[Regex]`
+  - [ ] Filter out English stopwords using set(stopwords.words('english')). `[Stopwords]`
+  - [ ] Instantiate WordNetLemmatizer and lemmatize tokens to root grammatical lemmas. `[Lemmatization]`
+  - [ ] Export preprocessed reviews to ./data/IMDB_Cleaned.csv. `[Export]`
+
+### Exp 2: Bag-of-Words & TF-IDF Feature Engineering
+- **Course:** `Natural Language Processing`
+- **Local File:** `Exp2_Bow_TFIDF.ipynb`
+- **Objective:** Transform preprocessed text reviews into numerical vectors using CountVectorizer (Bag of Words) and TfidfVectorizer. Limit maximum features, examine sparse matrices, and serialize vectorizers with pickle.
+- **Practice Tasks:**
+  - [ ] Fit CountVectorizer on sample documents and inspect get_feature_names_out(). `[BoW]`
+  - [ ] Convert sparse occurrence matrix to dense array with .toarray() and format as DataFrame. `[BoW]`
+  - [ ] Instantiate TfidfVectorizer(max_features=500) and fit on cleaned reviews corpus. `[TF-IDF]`
+  - [ ] Calculate and verify TF-IDF mathematical formula: TF(t,d) * log(N / DF(t)). `[Theory]`
+  - [ ] Save feature matrix to IMDB_TFIDF.csv and dump vectorizer to pickle file. `[Serialization]`
+
+### Exp 3: N-Gram Language Modeling & Probability Distribution
+- **Course:** `Natural Language Processing`
+- **Local File:** `N-gram .ipynb`
+- **Objective:** Extract unigrams, bigrams, and trigrams from text. Compute joint and conditional word transition probabilities to predict upcoming tokens.
+- **Practice Tasks:**
+  - [ ] Tokenize text into lowercase words. `[Tokenization]`
+  - [ ] Generate bigrams and trigrams using list(nltk.util.ngrams(tokens, n)). `[N-Grams]`
+  - [ ] Count frequencies with collections.Counter and rank top 10 most common n-grams. `[Frequencies]`
+  - [ ] Compute conditional transition probability P(w2 | w1) = Count(w1, w2) / Count(w1). `[Probability]`
+  - [ ] Build next-word auto-completion function based on maximum likelihood bigrams. `[Application]`
+
+### Exp 4: End-to-End Sentiment Classification Pipeline
+- **Course:** `Natural Language Processing`
+- **Local File:** `Sentiment_Analysis_Pipeline.ipynb`
+- **Objective:** Integrate text preprocessing, TF-IDF vectorization, and statistical classification into a unified pipeline classifying review sentiment with high precision.
+- **Practice Tasks:**
+  - [ ] Split dataset into 80% train and 20% test using train_test_split. `[Split]`
+  - [ ] Build sklearn.pipeline.Pipeline chaining TfidfVectorizer and MultinomialNB. `[Pipeline]`
+  - [ ] Fit pipeline on training data and generate predictions on test split. `[Training]`
+  - [ ] Print classification_report (precision, recall, f1-score) and confusion matrix. `[Metrics]`
+  - [ ] Test pipeline on arbitrary new user reviews. `[Inference]`
+
+### Exp 1: TypeScript Foundations, Custom Interfaces & Function Overloading
+- **Course:** `Advanced Web Technology`
+- **Local File:** `Overloading.ts`
+- **Objective:** Develop strongly-typed TypeScript modules implementing custom object interfaces, nested address models, union types, and compile-time function overloading signatures.
+- **Practice Tasks:**
+  - [ ] Declare primitive variables with union types: let x: number | string = 10. `[Types]`
+  - [ ] Define nested TypeScript interfaces Address and data. `[Interfaces]`
+  - [ ] Instantiate strongly-typed object matching the interface schema. `[Objects]`
+  - [ ] Declare overloaded signatures for function combine() with diverse argument types. `[Overloading]`
+  - [ ] Implement single runtime function body handling the overloaded signatures. `[Implementation]`
+
+### Exp 2: React Component Architecture & Unidirectional Props Flow
+- **Course:** `Advanced Web Technology`
+- **Local File:** `parent.jsx`
+- **Objective:** Architect a modular React component hierarchy demonstrating parent-to-child data flow, props destructuring, default fallback parameters, and dynamic list mapping.
+- **Practice Tasks:**
+  - [ ] Create Parent functional component containing array of user objects. `[Parent Component]`
+  - [ ] Pass primitive, array, and object props down to child components. `[Props Passing]`
+  - [ ] Destructure props in Child component with default parameter values. `[Destructuring]`
+  - [ ] Render dynamic list of cards using users.map(user => <Card key={user.id} />). `[List Rendering]`
+  - [ ] Apply CSS styling and modular classes for modern card layout. `[Styling]`
+
+### Exp 1: Temporal Engineering & Pandas DateTimeIndex
+- **Course:** `Time Series Modelling and Forecasting`
+- **Local File:** `1_2_pandas_datetime.ipynb`
+- **Objective:** Parse real UPI transaction timestamps into Pandas DateTimeIndex, perform frequency resampling (daily, weekly, monthly aggregates), handle missing periods, and compute temporal summary metrics.
+- **Practice Tasks:**
+  - [ ] Parse string timestamps to datetime objects using pd.to_datetime(format='%Y-%m-%d %H:%M:%S'). `[Parsing]`
+  - [ ] Set datetime column as DataFrame index with df.set_index('timestamp', inplace=True). `[Indexing]`
+  - [ ] Perform temporal slicing for specific date ranges using df.loc['2026-01':'2026-06']. `[Slicing]`
+  - [ ] Generate synthetic continuous date intervals using pd.date_range(freq='D'). `[Resampling]`
+  - [ ] Resample transaction amounts to weekly sums using df.resample('W').sum(). `[Aggregation]`
+
+### Exp 2: Additive & Multiplicative Time Series Decomposition
+- **Course:** `Time Series Modelling and Forecasting`
+- **Local File:** `2_2_additive_decompostion.ipynb`
+- **Objective:** Decompose electricity consumption and tourist arrival time series into Trend, Seasonality, and Residuals using statsmodels seasonal_decompose. Compare additive and multiplicative hypotheses.
+- **Practice Tasks:**
+  - [ ] Load electricity consumption time series and inspect seasonal periodicity. `[Data]`
+  - [ ] Execute statsmodels.tsa.seasonal.seasonal_decompose with model='additive' and period=12. `[Additive]`
+  - [ ] Execute seasonal_decompose with model='multiplicative' for series with growing seasonal amplitude. `[Multiplicative]`
+  - [ ] Plot 4-panel decomposition figure (Observed, Trend, Seasonal, Residuals). `[Visualization]`
+  - [ ] Check residual series for white noise characteristics and stationarity. `[Validation]`
+
+### Exp 3: Smoothing Techniques: Simple & Exponential Moving Averages
+- **Course:** `Time Series Modelling and Forecasting`
+- **Local File:** `2_4_moving_averages.ipynb`
+- **Objective:** Implement SMA and EMA smoothing algorithms on retail sales data. Analyze the tradeoff between noise reduction and phase lag across window sizes.
+- **Practice Tasks:**
+  - [ ] Load sales smoothing dataset and plot raw fluctuations. `[Data]`
+  - [ ] Calculate 3-day and 7-day Simple Moving Averages using df.rolling(window).mean(). `[SMA]`
+  - [ ] Calculate Exponential Moving Average with df.ewm(span=7, adjust=False).mean(). `[EMA]`
+  - [ ] Overlay raw, SMA, and EMA curves on a single chart to observe lag difference. `[Visualization]`
+  - [ ] Compute Mean Absolute Error (MAE) between raw sales and smoothed series. `[Evaluation]`
+
+### Exp 4: Cloud Time Series Ingestion via AWS S3
+- **Course:** `Time Series Modelling and Forecasting`
+- **Local File:** `AWS_CLOUD.ipynb`
+- **Objective:** Stream cloud-hosted financial transaction datasets directly from Amazon S3 buckets using Python Boto3 client without storing intermediate files on local disk.
+- **Practice Tasks:**
+  - [ ] Install boto3 and initialize S3 client: boto3.client('s3'). `[Setup]`
+  - [ ] List bucket contents using s3.list_objects_v2(Bucket='shaunak43rane'). `[S3 API]`
+  - [ ] Fetch object stream using s3.get_object(Bucket=..., Key=...)['Body'].read(). `[Streaming]`
+  - [ ] Load streamed bytes buffer into pd.read_csv(io.BytesIO(data)). `[Ingestion]`
+  - [ ] Verify parsed DateTimeIndex and column data types. `[Validation]`
+
+### Exp 1: Single-Layer Perceptron Logic Gates (AND, OR, NAND, NOR)
+- **Course:** `Deep Learning (Neural Network)`
+- **Local File:** `AND.ipynb`
+- **Objective:** Implement and train a single-layer perceptron from scratch using NumPy to classify linearly separable boolean functions (AND, OR, NAND, NOR). Derive the mathematical weight update rule and observe convergence within epochs.
+- **Practice Tasks:**
+  - [ ] Import numpy and initialize binary truth table inputs [[0,0], [0,1], [1,0], [1,1]] with target labels. `[Setup]`
+  - [ ] Write the step activation function: return 1 if z > 0 else 0. `[Algorithm]`
+  - [ ] Initialize weights = np.zeros(2), bias = 0.0, learning rate eta = 0.1, and epochs = 10. `[Setup]`
+  - [ ] Implement nested training loop: compute linear combination z = dot(x, w) + b and error e = y - y_hat. `[Implementation]`
+  - [ ] Apply delta rule: w += eta * e * x and b += eta * e when error is non-zero. `[Implementation]`
+  - [ ] Plot decision boundary line w1*x1 + w2*x2 + b = 0 and verify all 4 truth table outputs. `[Validation]`
+
+### Exp 2: Non-Linear Separability Analysis (The XOR Limitation)
+- **Course:** `Deep Learning (Neural Network)`
+- **Local File:** `XOR.ipynb`
+- **Objective:** Demonstrate why a single-layer perceptron fails to learn the XOR boolean function due to non-linear separability. Observe persistent error oscillation and explain the mathematical necessity of hidden layers.
+- **Practice Tasks:**
+  - [ ] Set up XOR dataset: X = [[0,0], [0,1], [1,0], [1,1]], y = [0, 1, 1, 0]. `[Setup]`
+  - [ ] Execute single-layer perceptron training for 20 epochs and record error per epoch. `[Experiment]`
+  - [ ] Log the oscillating weight vector and verify error never converges to zero. `[Analysis]`
+  - [ ] Plot the 4 points on a 2D Cartesian plane showing opposite corners share identical labels. `[Visualization]`
+  - [ ] Write theoretical conclusion explaining why multi-layer architectures solve this limitation. `[Theory]`
+
+### Exp 3: Multi-Layer Perceptron (MLP) & Backpropagation
+- **Course:** `Deep Learning (Neural Network)`
+- **Local File:** `Multi-Layer.ipynb`
+- **Objective:** Design, train, and evaluate a Multi-Layer Perceptron with hidden layers using Keras/TensorFlow to resolve the XOR problem. Inspect weight matrices and hidden activation mappings.
+- **Practice Tasks:**
+  - [ ] Import tensorflow as tf and numpy as np. `[Setup]`
+  - [ ] Define tf.keras.Sequential model with Input(2), Dense(4, activation='relu'), and Dense(1, activation='sigmoid'). `[Architecture]`
+  - [ ] Compile model with optimizer='adam', loss='binary_crossentropy', and metrics=['accuracy']. `[Compilation]`
+  - [ ] Train model for 500 epochs with verbose=0 and plot loss reduction curve. `[Training]`
+  - [ ] Evaluate model.predict(X) and verify output probabilities round to [0, 1, 1, 0]. `[Evaluation]`
+
+### Exp 4: Tensor Mathematics & Vector Calculus for Neural Networks
+- **Course:** `Deep Learning (Neural Network)`
+- **Local File:** `vector.ipynb`
+- **Objective:** Master multidimensional NumPy tensors, shape transformations, broadcasting rules, dot products, and mini-batch tensor multiplications underpinning neural network forward passes.
+- **Practice Tasks:**
+  - [ ] Create scalar, 1D vector, 2D matrix, 3D tensor and inspect .ndim, .shape, and .dtype. `[Foundations]`
+  - [ ] Perform tensor broadcasting between shape (4, 3) and shape (3,). `[Broadcasting]`
+  - [ ] Compute vector dot products np.dot(u, v) and matrix multiplications np.matmul(A, B). `[Linear Algebra]`
+  - [ ] Implement forward-pass linear transformation Z = X.dot(W) + b for batch size of 16. `[Practice]`
+
+### Exp 1: Dynamic Data Structures: Java Collection Framework (ArrayList & LinkedList)
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `ArrayList1.class`
+- **Objective:** Implement dynamic data structures using Java's ArrayList and LinkedList. Evaluate insertion, deletion, index-based element replacement (.set), and iterator performance.
+- **Practice Tasks:**
+  - [ ] Declare and instantiate generic ArrayList<String> in Java. `[Instantiation]`
+  - [ ] Append elements using list.add("A") and list.add("B"). `[Insertion]`
+  - [ ] Traverse list using index loop (i = 0; i < list.size(); i++) with list.get(i). `[Traversal]`
+  - [ ] Update element at index 1 using list.set(1, "C"). `[Mutation]`
+  - [ ] Compare time complexities of ArrayList vs LinkedList for random access and insertions. `[Analysis]`
+
+### Exp 2: Functional Programming & Java 8 Lambda Expressions
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `LambdaFunctions.pdf`
+- **Objective:** Write concise, expressive Java code using Java 8 Lambda expressions and Functional Interfaces. Implement custom calculators and filter collections using Streams.
+- **Practice Tasks:**
+  - [ ] Define custom @FunctionalInterface MathOperation with method int operate(int a, int b). `[Interface]`
+  - [ ] Implement addition and multiplication operations using lambda expressions: (a, b) -> a + b. `[Lambda]`
+  - [ ] Use java.util.function.Predicate<T> to filter numbers. `[Predicate]`
+  - [ ] Filter and collect lists using Java 8 Streams: list.stream().filter(...).collect(...). `[Streams]`
+
+### Exp 3: JDBC Database Connectivity & Swing GUI Integration
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `DBConnect.class`
+- **Objective:** Build an end-to-end desktop GUI application integrating NetBeans Swing and MySQL database. Connect via JDBC, execute parameterized queries, and display student records.
+- **Practice Tasks:**
+  - [ ] Configure MySQL connection string: jdbc:mysql://127.0.0.1:3306/ajpa?serverTimezone=UTC. `[Configuration]`
+  - [ ] Write DBConnect.dbCon() method returning java.sql.Connection instance. `[Connection]`
+  - [ ] Construct PreparedStatement with parameterized query: INSERT INTO student VALUES (?, ?, ?). `[PreparedStatement]`
+  - [ ] Execute query with statement.executeUpdate() and catch SQLExceptions. `[Execution]`
+  - [ ] Fetch records via ResultSet and populate Swing JTextField / JTable components. `[GUI Binding]`
+
+### Exp 4: Desktop GUI Forms & Multi-Document Interface (Swing & NetBeans Form)
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `StudentMDI.class`
+- **Objective:** Develop an interactive Swing desktop GUI application featuring a master MDI container (StudentMDI), modal student registration dialogs, search forms, and event-driven data binding.
+- **Practice Tasks:**
+  - [ ] Create JDesktopPane container within a parent JFrame. `[MDI Layout]`
+  - [ ] Design JInternalFrame registration form with JTextField and JComboBox. `[GUI Form]`
+  - [ ] Bind ActionListener to Submit button to collect and validate input fields. `[Event Handling]`
+  - [ ] Pass form inputs to DBConnect PreparedStatement for database insertion. `[DB Integration]`
+  - [ ] Implement SearchStudent lookup frame updating dynamic status labels. `[Form Interaction]`
+
+### Exp 5: Java Servlets: Web Application Request-Response Lifecycle & HTTP Handling
+- **Course:** `Advance Java Programming Lab`
+- **Local File:** `AJP_MidTerm_Question_Bank.pdf`
+- **Objective:** Build server-side Java web components using Servlets. Handle client HTTP GET and POST requests, process query parameters, maintain user state via HttpSession, and dispatch responses.
+- **Practice Tasks:**
+  - [ ] Extend HttpServlet and override doGet(HttpServletRequest, HttpServletResponse) and doPost(). `[Servlet API]`
+  - [ ] Configure servlet mapping using @WebServlet('/student') annotation or web.xml deployment descriptor. `[Routing]`
+  - [ ] Extract form submission parameters using request.getParameter('studentId'). `[Request Processing]`
+  - [ ] Store and retrieve session attributes using request.getSession().setAttribute('user', user). `[Session Management]`
+  - [ ] Forward processed request to view via RequestDispatcher.forward(request, response). `[Dispatching]`
+
+### Exp 1: Structured Data Ingestion & Preprocessing (Amazon Analytics)
+- **Course:** `Big Data Analytics`
+- **Local File:** `Amazon.ipynb`
+- **Objective:** Ingest large structured Amazon eCommerce records. Handle missing values, encode categorical variables, and normalize continuous numerical features using scikit-learn MinMaxScaler.
+- **Practice Tasks:**
+  - [ ] Load amazon.csv and inspect df.info(), df.describe(), and null value counts. `[EDA]`
+  - [ ] Impute missing numerical values with column median and categorical with mode. `[Imputation]`
+  - [ ] Instantiate sklearn.preprocessing.MinMaxScaler and fit on price/rating features. `[Scaling]`
+  - [ ] Generate correlation matrix df.corr() to detect collineary features. `[Correlation]`
+  - [ ] Export clean processed table to amazon_preprocessed.csv. `[Export]`
+
+### Exp 2: Semi-Structured JSON Processing & Schema Normalization
+- **Course:** `Big Data Analytics`
+- **Local File:** `Netflix.ipynb`
+- **Objective:** Parse complex semi-structured Netflix movie/show JSON catalogs. Flatten nested objects into 2D relational dataframes and explode multi-valued list attributes.
+- **Practice Tasks:**
+  - [ ] Load netflix.json using Python json.load() and inspect root keys. `[Parsing]`
+  - [ ] Flatten nested dictionary records into 2D table using pd.json_normalize(). `[Normalization]`
+  - [ ] Use .explode('genres') to convert list values into separate relational rows. `[Relational]`
+  - [ ] Group by genre and calculate total titles count and average release year. `[Aggregation]`
+  - [ ] Export tidy tabular dataset to netflix_clean.csv. `[Export]`
+
+### Exp 3: Unstructured Text Mining & Sentiment Token Extraction
+- **Course:** `Big Data Analytics`
+- **Local File:** `Amazon_Review.ipynb`
+- **Objective:** Stream and process large unstructured review corpus (train.ft.txt). Extract sentiment labels (__label__1, __label__2), clean text noise, and build word frequency distributions.
+- **Practice Tasks:**
+  - [ ] Stream train.ft.txt line by line using open() context manager. `[Streaming]`
+  - [ ] Extract label (__label__1 = Negative, __label__2 = Positive) using regex. `[Regex]`
+  - [ ] Clean review content by stripping non-alphanumeric noise and lowercasing. `[Cleaning]`
+  - [ ] Compute class balance between positive and negative reviews. `[Analysis]`
+  - [ ] Export parsed dataframe to unstructured_clean.csv. `[Export]`
+
+### 📋 Practice To-Do Action Items:
+1. Exp 1 (Data): Load IMDB Dataset CSV into Pandas DataFrame and inspect raw text samples.
+2. Exp 1 (Cleaning): Implement lowercasing and contractions.fix() to expand colloquial short forms.
+3. Exp 1 (Regex): Write regex expressions to strip HTML tags (<.*?>) and HTTP/HTTPS hyperlinks.
+4. Exp 1 (Stopwords): Filter out English stopwords using set(stopwords.words('english')).
+5. Exp 1 (Lemmatization): Instantiate WordNetLemmatizer and lemmatize tokens to root grammatical lemmas.
+6. Exp 1 (Export): Export preprocessed reviews to ./data/IMDB_Cleaned.csv.
+7. Exp 2 (BoW): Fit CountVectorizer on sample documents and inspect get_feature_names_out().
+8. Exp 2 (BoW): Convert sparse occurrence matrix to dense array with .toarray() and format as DataFrame.
+9. Exp 2 (TF-IDF): Instantiate TfidfVectorizer(max_features=500) and fit on cleaned reviews corpus.
+10. Exp 2 (Theory): Calculate and verify TF-IDF mathematical formula: TF(t,d) * log(N / DF(t)).
+11. Exp 2 (Serialization): Save feature matrix to IMDB_TFIDF.csv and dump vectorizer to pickle file.
+12. Exp 3 (Tokenization): Tokenize text into lowercase words.
+... and 98 more practice tasks available in the Labworks & Code Practice tab.
+
+💡 *You can also view full starter code, test suites, and toggle completed tasks in the **Labworks & Code Practice** tab.*

@@ -43,13 +43,23 @@ try:
         else: print_lg("Default profile directory not found. Logging in with a guest profile, Web history will not be saved!")
     driver = None
     # 1. First check if Chrome is already active on port 9222 with the user's logged-in session
+    import socket
+    port_open = False
     try:
-        cdp_options = Options()
-        cdp_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
-        driver = webdriver.Chrome(options=cdp_options)
-        print_lg("Connected to active Chrome session on 127.0.0.1:9222 (bypassing login & anti-bot!)")
-    except Exception as cdp_err:
-        print_lg(f"CDP port 9222 not available ({cdp_err}). Initializing dedicated Chrome driver...")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.3)
+            port_open = (s.connect_ex(('127.0.0.1', 9222)) == 0)
+    except Exception:
+        pass
+
+    if port_open:
+        try:
+            cdp_options = Options()
+            cdp_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+            driver = webdriver.Chrome(options=cdp_options)
+            print_lg("Connected to active Chrome session on 127.0.0.1:9222 (bypassing login & anti-bot!)")
+        except Exception as cdp_err:
+            print_lg(f"CDP port 9222 not available ({cdp_err}). Initializing dedicated Chrome driver...")
 
     if not driver:
         if stealth_mode:
@@ -60,7 +70,18 @@ try:
                 print_lg(f"Undetected mode mismatch: {uc_err}. Falling back to standard ChromeDriverManager...")
                 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
         else:
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            try:
+                driver = webdriver.Chrome(options=options)
+            except Exception as chrome_init_err:
+                print_lg(f"Default profile locked or unavailable ({chrome_init_err}). Using dedicated profile...")
+                alt_options = Options()
+                alt_profile = os.path.join(os.path.dirname(__file__), "..", "chrome_profile_linkedin")
+                alt_options.add_argument(f"--user-data-dir={alt_profile}")
+                alt_options.add_argument("--start-maximized")
+                try:
+                    driver = webdriver.Chrome(options=alt_options)
+                except Exception:
+                    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=alt_options)
 
     try:
         driver.maximize_window()

@@ -21,21 +21,25 @@ version:    24.12.29.12.30
 import os
 from pathlib import Path
 
-# Resolve latest resume dynamically from Auto Apply/Resume
+# Resolve latest resume dynamically from Portfolio / Auto Apply
+_portfolio_resume = Path(r"C:\Users\Shaunak Rane\Desktop\Projects\Portfolio\Shaunak_Rane_Resume.pdf")
 _auto_apply_dir = Path(__file__).resolve().parent.parent.parent
 _resume_dir = _auto_apply_dir / "Resume"
 
 def _get_latest_resume() -> str:
+    if _portfolio_resume.exists():
+        return str(_portfolio_resume)
     if _resume_dir.exists():
         pdfs = list(_resume_dir.glob("*.pdf"))
         if pdfs:
-            pdfs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
             for p in pdfs:
-                if "resume (2)" in p.name:
+                if "shaunak_rane_resume" in p.name.lower():
+                    return str(p)
+            for p in pdfs:
+                if "resume (2)" in p.name.lower():
                     return str(p)
             return str(pdfs[0])
-    fallback = str(_auto_apply_dir / "Resume" / "resume (2).pdf")
-    return fallback
+    return str(_portfolio_resume)
 
 default_resume_path = _get_latest_resume()
 

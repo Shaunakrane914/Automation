@@ -39,7 +39,16 @@ import {
   ChevronUp,
   AlertCircle,
   Trash2,
-  Search
+  Search,
+  Smartphone,
+  Wifi,
+  Laptop,
+  Monitor,
+  Cpu,
+  HardDrive,
+  Globe,
+  Compass,
+  Power
 } from 'lucide-react';
 
 interface PracticeTodo {
@@ -217,13 +226,52 @@ function renderFormattedMarkdown(content: string) {
   });
 }
 
+interface AntigravityChatSummary {
+  id: string;
+  title: string;
+  last_prompt: string;
+  message_count: number;
+  updated_at: string;
+  timestamp: number;
+  is_current?: boolean;
+}
+
+interface AntigravityMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  tool_calls?: any[];
+  timestamp: string;
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'labs' | 'resources' | 'career'>('copilot');
+  const [activeTab, setActiveTab] = useState<'copilot' | 'academic' | 'labs' | 'resources' | 'career' | 'remote' | 'antigravity'>('copilot');
   const [wsConnected, setWsConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; subject: string } | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Live Synced (Sept 2026)');
+
+  // Antigravity IDE Chat Hub states
+  const [antigravityChats, setAntigravityChats] = useState<AntigravityChatSummary[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string>('4c862611-5a11-4b3c-bc77-b72ad2056302');
+  const [antigravityMessages, setAntigravityMessages] = useState<AntigravityMessage[]>([]);
+  const [antigravityLoading, setAntigravityLoading] = useState<boolean>(false);
+  const [antigravitySending, setAntigravitySending] = useState<boolean>(false);
+  const [antigravityPromptInput, setAntigravityPromptInput] = useState<string>('');
+  const [antigravitySearch, setAntigravitySearch] = useState<string>('');
+  const [antigravityDrawerOpen, setAntigravityDrawerOpen] = useState<boolean>(false);
+  const [lastDirectiveInfo, setLastDirectiveInfo] = useState<{ file: string; timestamp: string } | null>(null);
+  const antigravityChatEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Remote Desktop states
+  const [remoteStatus, setRemoteStatus] = useState<any>(null);
+  const [remoteLoading, setRemoteLoading] = useState<boolean>(false);
+  const [remoteActionMsg, setRemoteActionMsg] = useState<string>('');
+  const [remoteCustomCmd, setRemoteCustomCmd] = useState<string>('');
+  const [remoteCmdOutput, setRemoteCmdOutput] = useState<{ stdout: string; stderr: string; exit_code: number } | null>(null);
+  const [remoteCmdRunning, setRemoteCmdRunning] = useState<boolean>(false);
+
 
   // Labworks states
   const [labworks, setLabworks] = useState<Labwork[]>([]);
@@ -239,6 +287,28 @@ export default function App() {
   const [rescanLabsLoading, setRescanLabsLoading] = useState<boolean>(false);
   const [expandedCodeIds, setExpandedCodeIds] = useState<Record<number, boolean>>({});
   const [copiedCodeId, setCopiedCodeId] = useState<number | null>(null);
+
+  // Mobile & Cross-device Workstation states (USB, Home Wi-Fi & Worldwide Cloud Access)
+  const [serverUrl, setServerUrl] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('student_os_server_url');
+      if (saved) return saved;
+      if (window.location.protocol === 'capacitor:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:8000';
+      }
+      return 'http://10.0.18.180:8000';
+    }
+    return 'http://10.0.18.180:8000';
+  });
+  const [laptopOnline, setLaptopOnline] = useState<boolean>(true);
+  const [connectionMode, setConnectionMode] = useState<'usb' | 'wifi' | 'global' | 'offline'>('usb');
+  const [globalTunnelUrl, setGlobalTunnelUrl] = useState<string>('');
+  const [tunnelStatus, setTunnelStatus] = useState<any>(null);
+  const [fetchingCloudRelay, setFetchingCloudRelay] = useState<boolean>(false);
+  const [mobileSyncing, setMobileSyncing] = useState<boolean>(false);
+  const [useGeminiMobile, setUseGeminiMobile] = useState<boolean>(true);
+  const [showServerModal, setShowServerModal] = useState<boolean>(false);
+  const [customIpInput, setCustomIpInput] = useState<string>('10.0.18.180');
 
   // Chat Copilot states
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -396,7 +466,162 @@ export default function App() {
     };
   }, []);
 
-  // Fetch initial data
+  // Helper to fetch and monitor the active global Cloudflare tunnel
+  const fetchGlobalTunnelStatus = async (baseUrl?: string) => {
+    const base = baseUrl || serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    try {
+      const res = await axios.get(`${base}/api/global/tunnel-status`, { timeout: 3000 });
+      if (res.data) {
+        setTunnelStatus(res.data);
+        if (res.data.effective_url) {
+          setGlobalTunnelUrl(res.data.effective_url);
+        }
+      }
+    } catch {
+      // tunnel status check optional
+    }
+  };
+
+  // Helper to query cloud relay for the active worldwide URL
+  const fetchFromCloudRelay = async (): Promise<string | null> => {
+    setFetchingCloudRelay(true);
+    try {
+      const res = await axios.get('https://ntfy.sh/shaunak_studentos_global_url_88f9a2/raw?poll=1', { timeout: 4000 });
+      if (res.data) {
+        let parsed: any = null;
+        try {
+          parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+        } catch {
+          if (typeof res.data === 'string' && res.data.startsWith('http')) parsed = { url: res.data.trim() };
+        }
+        if (parsed?.url && parsed.url.startsWith('http')) {
+          setGlobalTunnelUrl(parsed.url);
+          return parsed.url;
+        }
+      }
+    } catch (e) {
+      console.warn('Cloud discovery query note:', e);
+    } finally {
+      setFetchingCloudRelay(false);
+    }
+    return null;
+  };
+
+  // Dynamic backend URL configuration & Laptop Reachability Auto-Discovery (USB -> Wi-Fi -> Worldwide Cloud)
+  useEffect(() => {
+    let isMounted = true;
+    const checkConnection = async () => {
+      const localCandidates = [
+        { url: serverUrl, mode: serverUrl.includes('trycloudflare') ? 'global' : serverUrl.includes('10.0.') ? 'wifi' : 'usb' },
+        { url: 'http://localhost:8000', mode: 'usb' },
+        { url: 'http://10.0.18.180:8000', mode: 'wifi' },
+        { url: 'http://127.0.0.1:8000', mode: 'usb' }
+      ];
+
+      for (const candidate of localCandidates) {
+        if (!candidate.url) continue;
+        try {
+          const res = await axios.get(`${candidate.url}/api/mobile/status`, { timeout: 2000 });
+          if (res.data && res.data.status === 'online' && isMounted) {
+            axios.defaults.baseURL = candidate.url;
+            setServerUrl(candidate.url);
+            setLaptopOnline(true);
+            setConnectionMode(candidate.mode as any);
+            localStorage.setItem('student_os_server_url', candidate.url);
+            fetchAntigravityChats();
+            fetchAcademicData();
+            fetchLabworks();
+            fetchRemoteStatus();
+            fetchGlobalTunnelStatus(candidate.url);
+            return;
+          }
+        } catch (e) {
+          // continue
+        }
+      }
+
+      // If local network not reachable, auto-discover Worldwide Cloud Tunnel!
+      const discoveredUrl = await fetchFromCloudRelay();
+      if (discoveredUrl && isMounted) {
+        try {
+          const testGlobal = await axios.get(`${discoveredUrl}/api/mobile/status`, { timeout: 4000 });
+          if (testGlobal.data && testGlobal.data.status === 'online' && isMounted) {
+            axios.defaults.baseURL = discoveredUrl;
+            setServerUrl(discoveredUrl);
+            setLaptopOnline(true);
+            setConnectionMode('global');
+            localStorage.setItem('student_os_server_url', discoveredUrl);
+            fetchAntigravityChats();
+            fetchAcademicData();
+            fetchLabworks();
+            fetchRemoteStatus();
+            fetchGlobalTunnelStatus(discoveredUrl);
+            return;
+          }
+        } catch (e) {
+          console.warn('Global tunnel verification failed:', e);
+        }
+      }
+
+      if (isMounted) {
+        setLaptopOnline(false);
+        setConnectionMode('offline');
+      }
+    };
+
+    checkConnection();
+    return () => { isMounted = false; };
+  }, [serverUrl]);
+
+  // On-demand manual sync with laptop workstation
+  const syncWithLaptop = async () => {
+    setMobileSyncing(true);
+    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    try {
+      const res = await axios.get(`${base}/api/mobile/sync`, { timeout: 8000 });
+      if (res.data) {
+        setLaptopOnline(true);
+        if (res.data.academic?.subjects) setSubjects(res.data.academic.subjects);
+        if (res.data.academic?.assignments) setAssignments(res.data.academic.assignments);
+        if (res.data.career?.applications) setCareerItems(res.data.career.applications);
+        setLastSyncTime(`Synced with Laptop (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`);
+        fetchAntigravityChats();
+        fetchLabworks();
+        fetchTodos();
+        fetchLogs();
+        fetchGlobalTunnelStatus(base);
+      }
+    } catch (err) {
+      console.warn('Mobile sync failed, attempting worldwide cloud discovery fallback:', err);
+      // Try Cloud Discovery Fallback
+      try {
+        const cloudUrl = await fetchFromCloudRelay();
+        if (cloudUrl) {
+          const altRes = await axios.get(`${cloudUrl}/api/mobile/sync`, { timeout: 6000 });
+          if (altRes.data) {
+            axios.defaults.baseURL = cloudUrl;
+            setServerUrl(cloudUrl);
+            setLaptopOnline(true);
+            setConnectionMode('global');
+            if (altRes.data.academic?.subjects) setSubjects(altRes.data.academic.subjects);
+            if (altRes.data.academic?.assignments) setAssignments(altRes.data.academic.assignments);
+            fetchAntigravityChats();
+            fetchLabworks();
+            fetchGlobalTunnelStatus(cloudUrl);
+          }
+        }
+      } catch {
+        setLaptopOnline(false);
+        fetchAcademicData();
+        fetchLabworks();
+      }
+    } finally {
+      setMobileSyncing(false);
+    }
+  };
+
+
+  // Fetch initial data (passive load, zero autorun)
   useEffect(() => {
     fetchAcademicData();
     fetchLabworks();
@@ -404,7 +629,146 @@ export default function App() {
     fetchTodos();
     fetchLogs();
     fetchAutoApplyStatus();
+    fetchRemoteStatus();
+    fetchAntigravityChats();
   }, []);
+
+  const fetchAntigravityChats = async () => {
+    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    try {
+      const res = await axios.get(`${base}/api/antigravity/chats`);
+      if (res.data && Array.isArray(res.data)) {
+        setAntigravityChats(res.data);
+        if (res.data.length > 0) {
+          const current = res.data.find(c => c.is_current) || res.data[0];
+          setSelectedChatId(current.id);
+          fetchChatMessages(current.id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch Antigravity chats:', err);
+    }
+  };
+
+  const fetchChatMessages = async (convId: string) => {
+    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+    setAntigravityLoading(true);
+    try {
+      const res = await axios.get(`${base}/api/antigravity/chats/${convId}/messages?limit=60`);
+      if (res.data && Array.isArray(res.data)) {
+        setAntigravityMessages(res.data);
+        setTimeout(() => {
+          antigravityChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 150);
+      }
+    } catch (err) {
+      console.error(`Failed to fetch messages for ${convId}:`, err);
+    } finally {
+      setAntigravityLoading(false);
+    }
+  };
+
+  const handleSelectChat = (convId: string) => {
+    setSelectedChatId(convId);
+    setAntigravityDrawerOpen(false);
+    fetchChatMessages(convId);
+  };
+
+  const handleSendAntigravityPrompt = async (customPrompt?: string) => {
+    const promptToSend = customPrompt || antigravityPromptInput.trim();
+    if (!promptToSend || !selectedChatId || antigravitySending) return;
+
+    const base = serverUrl || axios.defaults.baseURL || 'http://localhost:8000';
+
+    // Optimistically add user prompt to transcript
+    const userMsg: AntigravityMessage = {
+      id: `u_${Date.now()}`,
+      sender: 'user',
+      text: promptToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setAntigravityMessages(prev => [...prev, userMsg]);
+    setAntigravityPromptInput('');
+    setAntigravitySending(true);
+
+    try {
+      const res = await axios.post(`${base}/api/antigravity/chats/${selectedChatId}/prompt`, {
+        prompt: promptToSend
+      });
+
+      if (res.data && res.data.reply) {
+        const assistantMsg: AntigravityMessage = {
+          id: `a_${Date.now()}`,
+          sender: 'assistant',
+          text: res.data.reply,
+          timestamp: res.data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setAntigravityMessages(prev => [...prev, assistantMsg]);
+        if (res.data.directive_file) {
+          setLastDirectiveInfo({
+            file: res.data.directive_file,
+            timestamp: new Date().toLocaleTimeString()
+          });
+        }
+      }
+      // Re-fetch chat summary list to update timestamps & counts
+      fetchAntigravityChats();
+    } catch (err: any) {
+      const errMsg: AntigravityMessage = {
+        id: `err_${Date.now()}`,
+        sender: 'assistant',
+        text: `⚠️ **Workstation Execution Notice**\n\nDirective queued locally on laptop at \`antigravity_prompts/latest_active_directive.md\`. Error reaching cloud API: ${err.message}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setAntigravityMessages(prev => [...prev, errMsg]);
+    } finally {
+      setAntigravitySending(false);
+      setTimeout(() => {
+        antigravityChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+
+  const fetchRemoteStatus = async () => {
+    setRemoteLoading(true);
+    try {
+      const res = await axios.get('/api/remote/status');
+      setRemoteStatus(res.data);
+    } catch (err) {
+      console.error('Failed to fetch remote status:', err);
+    } finally {
+      setRemoteLoading(false);
+    }
+  };
+
+  const handleRemoteLaunch = async (target: string) => {
+    setRemoteActionMsg(`Triggering ${target} on laptop...`);
+    try {
+      const res = await axios.post('/api/remote/launch', { target });
+      setRemoteActionMsg(res.data.message || 'Action executed.');
+      setTimeout(() => setRemoteActionMsg(''), 4000);
+      fetchRemoteStatus();
+    } catch (err: any) {
+      setRemoteActionMsg(`Error: ${err.message}`);
+      setTimeout(() => setRemoteActionMsg(''), 4000);
+    }
+  };
+
+  const handleRemoteCommand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!remoteCustomCmd.trim()) return;
+    setRemoteCmdRunning(true);
+    try {
+      const res = await axios.post('/api/remote/command', { command: remoteCustomCmd });
+      setRemoteCmdOutput(res.data);
+      fetchRemoteStatus();
+    } catch (err: any) {
+      setRemoteCmdOutput({ stdout: '', stderr: err.message, exit_code: -1 });
+    } finally {
+      setRemoteCmdRunning(false);
+    }
+  };
 
   const fetchLabworks = async () => {
     try {
@@ -729,7 +1093,12 @@ export default function App() {
 
     try {
       const historyPayload = chatMessages.slice(-6).map((m) => ({ sender: m.sender, text: m.text }));
-      const res = await axios.post('/api/chat', { query: finalQuery, history: historyPayload });
+      const chatEndpoint = useGeminiMobile ? '/api/mobile/chat' : '/api/chat';
+      const res = await axios.post(chatEndpoint, {
+        query: finalQuery,
+        history: historyPayload,
+        use_gemini: useGeminiMobile
+      });
       const assistantMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
         sender: 'assistant',
@@ -796,18 +1165,54 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-3">
-            {/* Live Feed Status */}
-            <div className="hidden sm:flex items-center space-x-2 text-xs font-mono px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800">
-              <span className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
-              <span className={wsConnected ? 'text-emerald-400' : 'text-zinc-400'}>
-                {wsConnected ? 'LIVE FEED' : 'STANDBY'}
+            {/* Laptop Workstation Connection Status */}
+            <button
+              onClick={() => setShowServerModal(true)}
+              className={`flex items-center space-x-1.5 text-xs font-mono px-2.5 py-1 rounded border transition ${
+                laptopOnline
+                  ? connectionMode === 'global'
+                    ? 'bg-purple-950/50 text-purple-300 border-purple-700/80 hover:bg-purple-900/50'
+                    : connectionMode === 'wifi'
+                    ? 'bg-blue-950/50 text-blue-300 border-blue-700/80 hover:bg-blue-900/50'
+                    : 'bg-emerald-950/40 text-emerald-400 border-emerald-800/80 hover:bg-emerald-900/40'
+                  : 'bg-rose-950/40 text-rose-400 border-rose-800/80 hover:bg-rose-900/40'
+              }`}
+              title="Configure Connection (Worldwide Cloud / Wi-Fi / USB)"
+            >
+              {connectionMode === 'global' ? (
+                <Globe className="h-3.5 w-3.5 text-purple-400" />
+              ) : connectionMode === 'wifi' ? (
+                <Wifi className="h-3.5 w-3.5 text-blue-400" />
+              ) : (
+                <Laptop className="h-3.5 w-3.5" />
+              )}
+              <span className={`h-2 w-2 rounded-full ${laptopOnline ? (connectionMode === 'global' ? 'bg-purple-400 animate-pulse' : 'bg-emerald-500 animate-pulse') : 'bg-rose-500'}`} />
+              <span className="inline">
+                {laptopOnline
+                  ? connectionMode === 'global'
+                    ? '🌐 Worldwide Cloud'
+                    : connectionMode === 'wifi'
+                    ? '📶 Wi-Fi Sync'
+                    : '🔌 USB Direct'
+                  : 'Offline'}
               </span>
-            </div>
+            </button>
+
+            {/* Manual On-Demand Workstation Sync Button (Zero Autorun) */}
+            <button
+              onClick={syncWithLaptop}
+              disabled={mobileSyncing}
+              className="px-3 py-1.5 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition flex items-center space-x-1.5 border border-emerald-500 shadow-sm disabled:opacity-50"
+              title="Synchronize data with laptop without triggering heavy background scripts"
+            >
+              <Zap className={`h-3.5 w-3.5 ${mobileSyncing ? 'animate-spin' : ''}`} />
+              <span>{mobileSyncing ? 'Syncing...' : 'Sync Laptop'}</span>
+            </button>
 
             {/* Test Alert Button */}
             <button
               onClick={sendTestAlert}
-              className="px-2.5 py-1.5 rounded text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition flex items-center space-x-1.5 border border-zinc-700"
+              className="hidden sm:flex px-2.5 py-1.5 rounded text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition items-center space-x-1.5 border border-zinc-700"
               title="Send notification ping"
             >
               <Bell className="h-3.5 w-3.5 text-zinc-400" />
@@ -818,14 +1223,14 @@ export default function App() {
             <button
               onClick={triggerSync}
               disabled={syncing}
-              className="px-3.5 py-1.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition flex items-center space-x-1.5 border border-blue-500 shadow-sm disabled:opacity-50"
+              className="hidden sm:flex px-3.5 py-1.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition items-center space-x-1.5 border border-blue-500 shadow-sm disabled:opacity-50"
               title="Rerun complete DigiCampus crawler and file audit"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
               <span>
                 {syncing
                   ? (syncProgress ? `Auditing (${syncProgress.current}/${syncProgress.total})...` : 'Syncing...')
-                  : 'Rerun Full Update'}
+                  : 'Full Re-Audit'}
               </span>
             </button>
           </div>
@@ -834,11 +1239,13 @@ export default function App() {
         {/* Tab Navigation */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 overflow-x-auto border-t border-zinc-800">
           {[
-            { id: 'copilot', label: 'AI Copilot & Antigravity', icon: Bot, isSpecial: true },
-            { id: 'academic', label: 'Classroom & Academics', icon: GraduationCap },
-            { id: 'labs', label: 'Labworks & Code Practice', icon: FlaskConical, badge: labworks.length },
-            { id: 'resources', label: 'Course Materials & Files', icon: FolderCheck },
-            { id: 'career', label: 'Career & Opportunities', icon: Briefcase },
+            { id: 'antigravity', label: '⚡ Antigravity IDE Chat', icon: Sparkles, isSpecial: true, badge: antigravityChats.length },
+            { id: 'copilot', label: 'AI Copilot', icon: Bot, isSpecial: false },
+            { id: 'remote', label: 'Remote Desktop', icon: Monitor, isSpecial: false },
+            { id: 'academic', label: 'Classroom & Academics', icon: GraduationCap, isSpecial: false },
+            { id: 'labs', label: 'Labworks & Code Practice', icon: FlaskConical, badge: labworks.length, isSpecial: false },
+            { id: 'resources', label: 'Course Materials & Files', icon: FolderCheck, isSpecial: false },
+            { id: 'career', label: 'Career & Opportunities', icon: Briefcase, isSpecial: false },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -848,20 +1255,20 @@ export default function App() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center space-x-2 py-2.5 px-3.5 text-xs font-medium border-b-2 transition whitespace-nowrap ${
                   isActive
-                    ? 'border-blue-500 text-blue-400 bg-zinc-800/40 font-semibold'
+                    ? 'border-amber-500 text-amber-400 bg-zinc-800/40 font-semibold'
                     : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
                 <Icon className={`h-3.5 w-3.5 ${tab.isSpecial ? 'text-amber-400 animate-pulse' : ''}`} />
                 <span>{tab.label}</span>
                 {tab.badge !== undefined && tab.badge > 0 && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-blue-900/60 text-blue-300 border border-blue-700/60 font-semibold">
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-900/60 text-amber-300 border border-amber-700/60 font-semibold">
                     {tab.badge}
                   </span>
                 )}
                 {tab.isSpecial && (
                   <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
-                    ⚡ ULTIMATE
+                    ⚡ DIRECT
                   </span>
                 )}
               </button>
@@ -2189,6 +2596,529 @@ export default function App() {
           </div>
         )}
 
+        {/* ----------------- REMOTE DESKTOP & WORKSTATION CONTROL TAB ----------------- */}
+        {activeTab === 'remote' && (
+          <div className="space-y-6">
+            {/* Header & Status Card */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/90 p-5 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center space-x-3.5">
+                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-blue-900/30">
+                    <Monitor className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-base font-bold text-white tracking-tight">Google Chrome Remote Desktop & Workstation Hub</h2>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800 font-semibold">
+                        ACTIVE INTEGRATION
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Control Shaunak's laptop from your mobile phone with Chrome Remote Desktop WebRTC host streaming & remote app launchers.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2.5">
+                  <button
+                    onClick={fetchRemoteStatus}
+                    disabled={remoteLoading}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition flex items-center space-x-1.5 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${remoteLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh Host</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Banner */}
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5">
+                    <span className={`h-3 w-3 rounded-full ${remoteStatus?.is_running ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-100">Chrome Remote Desktop Host</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">Service: <span className="text-zinc-200">chromoting ({remoteStatus?.status || 'Running'})</span></p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800 font-semibold">
+                    READY
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5">
+                    <Laptop className="h-4 w-4 text-blue-400" />
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-100">Workstation Hostname</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">{remoteStatus?.hostname || 'Shaunak'} (Windows 11)</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950/60 text-blue-400 border border-blue-800">
+                    {remoteStatus?.ip_lan || '10.0.18.180'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5">
+                    <Cpu className="h-4 w-4 text-purple-400" />
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-100">Hardware Telemetry</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">
+                        CPU {remoteStatus?.telemetry?.cpu_percent || 0}% • RAM {remoteStatus?.telemetry?.ram_percent || 0}% • Disk {remoteStatus?.telemetry?.disk_percent || 0}%
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950/60 text-purple-400 border border-purple-800">
+                    RTX 3050
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Action Deck: Google Remote Desktop Hero */}
+            <div className="rounded-xl border border-blue-800/60 bg-gradient-to-br from-blue-950/30 via-zinc-900 to-indigo-950/30 p-6 shadow-xl relative overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                <div className="space-y-2 max-w-xl">
+                  <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-blue-900/40 border border-blue-700/50 text-[11px] font-medium text-blue-300">
+                    <Globe className="h-3.5 w-3.5 text-blue-400" />
+                    <span>Google WebRTC Remote Connection Protocol</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    Stream and Control Your Laptop Desktop
+                  </h3>
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    Connect directly to your laptop screen with ultra-low latency, full mouse & keyboard controls, and multi-monitor support powered by Google Chrome Remote Desktop.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap sm:flex-nowrap gap-3 flex-shrink-0">
+                  <a
+                    href="https://remotedesktop.google.com/access"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-lg shadow-blue-950 flex items-center space-x-2 border border-blue-400"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Launch Remote Desktop Session</span>
+                  </a>
+
+                  <a
+                    href="https://play.google.com/store/apps/details?id=com.google.chromeremotedesktop"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs transition border border-zinc-700 flex items-center space-x-2"
+                  >
+                    <Smartphone className="h-4 w-4 text-emerald-400" />
+                    <span>Android Mobile App</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Remote Workstation App Launchers */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono">
+                  🚀 Remote Workstation Launchers (Run on Laptop from Phone)
+                </h3>
+                {remoteActionMsg && (
+                  <span className="text-xs text-emerald-400 font-mono animate-pulse">
+                    {remoteActionMsg}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { id: 'antigravity', name: 'Antigravity IDE', desc: 'Spawn Antigravity with Automation workspace', icon: Sparkles, color: 'text-amber-400' },
+                  { id: 'vscode', name: 'VS Code Editor', desc: 'Open project repository in VS Code', icon: Code2, color: 'text-blue-400' },
+                  { id: 'chrome', name: 'Google Chrome', desc: 'Launch browser session on laptop', icon: Compass, color: 'text-emerald-400' },
+                  { id: 'explorer', name: 'Automation Explorer', desc: 'Open project folders in Windows Explorer', icon: Folder, color: 'text-yellow-400' },
+                  { id: 'terminal', name: 'PowerShell Terminal', desc: 'Spawn active CLI window on workstation', icon: Terminal, color: 'text-zinc-300' },
+                  { id: 'digicampus_sync', name: 'DigiCampus Scraper Audit', desc: 'Trigger full background academic sync', icon: RefreshCw, color: 'text-cyan-400' },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleRemoteLaunch(item.id)}
+                      className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 text-left transition flex items-start space-x-3 group"
+                    >
+                      <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 group-hover:scale-105 transition">
+                        <Icon className={`h-5 w-5 ${item.color}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-semibold text-zinc-100 group-hover:text-white transition flex items-center justify-between">
+                          <span>{item.name}</span>
+                          <Play className="h-3 w-3 text-zinc-600 group-hover:text-blue-400 transition" />
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 truncate mt-0.5">{item.desc}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Remote PowerShell Command Console */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden shadow-lg">
+              <div className="px-5 py-3.5 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Terminal className="h-4 w-4 text-emerald-400" />
+                  <span className="text-xs font-semibold text-zinc-200">Remote PowerShell Console (Execute on Laptop)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {['nvidia-smi', 'git status', 'dir', 'tasklist | select-string python'].map((cmd, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setRemoteCustomCmd(cmd)}
+                      className="hidden sm:inline-block px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono text-[10px] transition"
+                    >
+                      {cmd.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 space-y-3">
+                <form onSubmit={handleRemoteCommand} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-xs">PS &gt;</span>
+                    <input
+                      type="text"
+                      value={remoteCustomCmd}
+                      onChange={(e) => setRemoteCustomCmd(e.target.value)}
+                      placeholder="Type PowerShell command to run on laptop (e.g. nvidia-smi, git log -n 3)..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-12 pr-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={remoteCmdRunning || !remoteCustomCmd.trim()}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition disabled:opacity-50 flex items-center space-x-1.5 shadow"
+                  >
+                    <Play className={`h-3.5 w-3.5 ${remoteCmdRunning ? 'animate-spin' : ''}`} />
+                    <span>{remoteCmdRunning ? 'Running...' : 'Execute'}</span>
+                  </button>
+                </form>
+
+                {remoteCmdOutput && (
+                  <div className="rounded-lg bg-zinc-950 border border-zinc-800 p-3 font-mono text-[11px] space-y-2 overflow-x-auto max-h-60">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-500 border-b border-zinc-850 pb-1">
+                      <span>Exit Code: <span className={remoteCmdOutput.exit_code === 0 ? 'text-emerald-400' : 'text-rose-400'}>{remoteCmdOutput.exit_code}</span></span>
+                      <button
+                        onClick={() => setRemoteCmdOutput(null)}
+                        className="text-zinc-500 hover:text-zinc-300"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {remoteCmdOutput.stdout && (
+                      <pre className="text-zinc-200 whitespace-pre-wrap">{remoteCmdOutput.stdout}</pre>
+                    )}
+                    {remoteCmdOutput.stderr && (
+                      <pre className="text-rose-400 whitespace-pre-wrap">{remoteCmdOutput.stderr}</pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: ANTIGRAVITY IDE CHAT HUB */}
+        {activeTab === 'antigravity' && (
+          <div className="space-y-4">
+            {/* Top Workspace Header Banner */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-zinc-900 via-amber-950/25 to-zinc-900 border border-amber-700/50 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xl">
+              <div className="flex items-center space-x-3.5">
+                <div className="h-11 w-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner">
+                  <Sparkles className="h-6 w-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-base font-bold text-white tracking-tight">Antigravity IDE Direct Controller</h2>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-700 font-semibold shadow-sm">
+                      ACTIVE WORKSPACE
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 flex items-center space-x-2 mt-0.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>All code modifications execute directly on laptop workstation</span>
+                    <span className="text-zinc-600">•</span>
+                    <code className="text-amber-300 font-mono text-[11px]">Automation Workspace</code>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setAntigravityDrawerOpen(!antigravityDrawerOpen)}
+                  className="md:hidden px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-300 bg-amber-950/70 border border-amber-700 hover:bg-amber-900 transition flex items-center space-x-1.5 shadow"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  <span>Chats ({antigravityChats.length})</span>
+                </button>
+
+                <button
+                  onClick={() => fetchAntigravityChats()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition flex items-center space-x-1.5 shadow"
+                  title="Reload all offline chats from laptop"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${antigravityLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+
+                <button
+                  onClick={() => handleRemoteLaunch('antigravity')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 border border-amber-500 shadow-md shadow-amber-950/60 transition flex items-center space-x-1.5"
+                  title="Spawn Antigravity IDE on laptop"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  <span>Launch IDE</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Directive Saved Alert Notification */}
+            {lastDirectiveInfo && (
+              <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-700/70 text-xs text-emerald-300 flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                  <span>
+                    <strong>Workstation Directive Synced:</strong> Code instructions written to <code className="font-mono text-[11px] text-emerald-200">latest_active_directive.md</code> and copied to Windows clipboard ({lastDirectiveInfo.timestamp}).
+                  </span>
+                </div>
+                <button
+                  onClick={() => setLastDirectiveInfo(null)}
+                  className="text-emerald-400 hover:text-emerald-200 p-1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Main Chat Split Panel */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 h-[72vh] min-h-[500px]">
+              {/* Left Column: All Offline & Active Chats (Drawer on mobile, Sidebar on desktop) */}
+              <div className={`md:col-span-4 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col overflow-hidden shadow-lg ${
+                antigravityDrawerOpen ? 'fixed inset-3 z-50 md:relative md:inset-auto bg-zinc-900' : 'hidden md:flex'
+              }`}>
+                <div className="p-3.5 border-b border-zinc-800 bg-zinc-900 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Folder className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider font-mono">
+                      Offline Conversations ({antigravityChats.length})
+                    </span>
+                  </div>
+                  {antigravityDrawerOpen && (
+                    <button
+                      onClick={() => setAntigravityDrawerOpen(false)}
+                      className="md:hidden p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Bar */}
+                <div className="p-2.5 border-b border-zinc-800 bg-zinc-950">
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 text-zinc-500 absolute left-2.5 top-2" />
+                    <input
+                      type="text"
+                      value={antigravitySearch}
+                      onChange={(e) => setAntigravitySearch(e.target.value)}
+                      placeholder="Search chats by project or keyword..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Chat Items List */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                  {antigravityChats
+                    .filter(c => !antigravitySearch || c.title.toLowerCase().includes(antigravitySearch.toLowerCase()) || c.id.includes(antigravitySearch))
+                    .map((chat) => {
+                      const isSelected = selectedChatId === chat.id;
+                      return (
+                        <button
+                          key={chat.id}
+                          onClick={() => handleSelectChat(chat.id)}
+                          className={`w-full p-2.5 rounded-lg text-left transition flex flex-col space-y-1 border ${
+                            isSelected
+                              ? 'bg-amber-950/50 border-amber-600/80 text-white shadow-md'
+                              : 'bg-zinc-950/80 border-zinc-850 hover:bg-zinc-850 hover:border-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+                              {chat.is_current ? (
+                                <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+                              ) : (
+                                <span className="h-2 w-2 rounded-full bg-zinc-600 flex-shrink-0" />
+                              )}
+                              <span className="text-xs font-semibold truncate text-zinc-100">
+                                {chat.title}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 flex-shrink-0 ml-1">
+                              {chat.message_count} msgs
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 line-clamp-1">
+                            {chat.last_prompt || 'No prompt preview'}
+                          </p>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-500 font-mono pt-0.5">
+                            <span>ID: {chat.id.slice(0, 8)}...</span>
+                            <span>{chat.updated_at}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Right Column: Chat Transcript Stream & Code Execution Console */}
+              <div className="md:col-span-8 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col overflow-hidden shadow-lg">
+                {/* Active Chat Header */}
+                <div className="p-3.5 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="h-7 w-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-white truncate">
+                        {antigravityChats.find(c => c.id === selectedChatId)?.title || `Chat ${selectedChatId.slice(0, 8)}`}
+                      </h3>
+                      <div className="flex items-center space-x-2 text-[10px] text-zinc-400 font-mono">
+                        <span>Conv ID: {selectedChatId.slice(0, 13)}...</span>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-medium">● Local PC Execution Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      onClick={() => fetchChatMessages(selectedChatId)}
+                      className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition"
+                      title="Reload transcript"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${antigravityLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Directive Action Chips */}
+                <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-950 flex overflow-x-auto space-x-1.5 text-[10px] font-medium">
+                  {[
+                    { label: '⚡ Run Full Test Suite on Laptop', prompt: 'Run all tests in Student_OS/tests directory and print execution results.' },
+                    { label: '🔍 Check Codebase Git Status', prompt: 'Check git status and summarize modified files in Automation workspace.' },
+                    { label: '📝 Scaffold Java/Python Lab File', prompt: 'Scaffold a new lab experiment starter file with standard headers and test main.' },
+                    { label: '💻 Check Laptop Hardware & GPU', prompt: 'Run nvidia-smi and report memory usage on workstation.' },
+                    { label: '📊 DigiCampus Attendance Audit', prompt: 'Trigger DigiCampus attendance sync and calculate subject safety margins.' },
+                  ].map((chip, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSendAntigravityPrompt(chip.prompt)}
+                      disabled={antigravitySending}
+                      className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-amber-950/60 hover:text-amber-300 border border-zinc-800 text-zinc-300 whitespace-nowrap transition disabled:opacity-50"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Messages Stream */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs bg-zinc-950/50">
+                  {antigravityMessages.length === 0 && !antigravityLoading ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-500 space-y-2">
+                      <Sparkles className="h-8 w-8 text-amber-500/40" />
+                      <p className="text-xs">No messages loaded for this conversation.</p>
+                      <p className="text-[11px] text-zinc-600">Enter a code prompt below to execute code on your laptop workstation.</p>
+                    </div>
+                  ) : (
+                    antigravityMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                      >
+                        <div className="flex items-center space-x-1.5 mb-1 text-[10px] text-zinc-500 font-mono">
+                          <span>{msg.sender === 'user' ? 'Shaunak (Mobile Controller)' : 'Antigravity IDE Assistant'}</span>
+                          <span>•</span>
+                          <span>{msg.timestamp}</span>
+                        </div>
+                        <div
+                          className={`max-w-[92%] rounded-xl p-3.5 text-xs leading-relaxed ${
+                            msg.sender === 'user'
+                              ? 'bg-amber-600 text-white shadow-md'
+                              : 'bg-zinc-900 border border-zinc-800 text-zinc-200 shadow-sm'
+                          }`}
+                        >
+                          <div className="whitespace-pre-wrap">{renderFormattedMarkdown(msg.text)}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {antigravitySending && (
+                    <div className="flex items-center space-x-2 text-xs font-mono text-amber-400 bg-zinc-900 border border-amber-800/60 rounded-xl p-3 animate-pulse">
+                      <RefreshCw className="h-4 w-4 animate-spin text-amber-400" />
+                      <span>Executing code directive on laptop workstation ({selectedChatId.slice(0, 8)})...</span>
+                    </div>
+                  )}
+                  <div ref={antigravityChatEndRef} />
+                </div>
+
+                {/* Bottom Prompt Input Console */}
+                <div className="p-3 border-t border-zinc-800 bg-zinc-900">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSendAntigravityPrompt();
+                    }}
+                    className="flex flex-col gap-2"
+                  >
+                    <div className="relative">
+                      <textarea
+                        rows={2}
+                        value={antigravityPromptInput}
+                        onChange={(e) => setAntigravityPromptInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendAntigravityPrompt();
+                          }
+                        }}
+                        placeholder="Type coding prompt / directive to execute on laptop (e.g. 'Add unit test for auto apply engine', 'Refactor lab service')..."
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 resize-none font-sans"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] text-zinc-500 font-mono flex items-center space-x-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        <span>Workstation Workspace Active • Enter to Send</span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={antigravitySending || !antigravityPromptInput.trim()}
+                        className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 transition flex items-center space-x-1.5 shadow-md shadow-amber-950/40 disabled:opacity-50"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        <span>{antigravitySending ? 'Executing...' : 'Execute on Laptop'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
 
       </main>
 
@@ -2492,6 +3422,244 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Laptop Workstation Connection Modal */}
+      {showServerModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+              <div className="flex items-center space-x-2 text-sm font-semibold text-white">
+                <Laptop className="h-4 w-4 text-emerald-400" />
+                <span>Laptop Workstation Connection</span>
+              </div>
+              <button
+                onClick={() => setShowServerModal(false)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="flex items-center space-x-2.5">
+                  <span className={`h-3 w-3 rounded-full ${laptopOnline ? (connectionMode === 'global' ? 'bg-purple-400 animate-ping' : 'bg-emerald-500 animate-pulse') : 'bg-rose-500'}`} />
+                  <div>
+                    <div className="flex items-center space-x-1.5">
+                      <p className="text-xs font-semibold text-zinc-100">
+                        {laptopOnline ? 'Workstation Online' : 'Workstation Offline'}
+                      </p>
+                      <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold uppercase ${
+                        connectionMode === 'global' ? 'bg-purple-900/60 text-purple-300 border border-purple-700' :
+                        connectionMode === 'wifi' ? 'bg-blue-900/60 text-blue-300 border border-blue-700' :
+                        connectionMode === 'usb' ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700' :
+                        'bg-zinc-800 text-zinc-400'
+                      }`}>
+                        {connectionMode === 'global' ? '🌐 Worldwide Cloud' : connectionMode === 'wifi' ? '📶 Wi-Fi' : connectionMode === 'usb' ? '🔌 USB' : 'Offline'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-mono mt-0.5 break-all">{axios.defaults.baseURL || serverUrl}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    axios.get('/api/mobile/status')
+                      .then(() => setLaptopOnline(true))
+                      .catch(() => setLaptopOnline(false));
+                  }}
+                  className="px-2.5 py-1 text-[11px] font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 transition"
+                >
+                  Ping
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-2">
+                  Select Connection Route:
+                </label>
+                <div className="space-y-2">
+                  {/* Worldwide Cloud Tunnel Preset */}
+                  <button
+                    onClick={async () => {
+                      if (globalTunnelUrl) {
+                        setServerUrl(globalTunnelUrl);
+                        axios.defaults.baseURL = globalTunnelUrl;
+                        setConnectionMode('global');
+                        localStorage.setItem('student_os_server_url', globalTunnelUrl);
+                      } else {
+                        const url = await fetchFromCloudRelay();
+                        if (url) {
+                          setServerUrl(url);
+                          axios.defaults.baseURL = url;
+                          setConnectionMode('global');
+                          localStorage.setItem('student_os_server_url', url);
+                        }
+                      }
+                    }}
+                    className={`w-full p-2.5 text-xs text-left rounded-lg border transition ${
+                      connectionMode === 'global' || serverUrl.includes('trycloudflare.com')
+                        ? 'bg-purple-950/40 text-purple-200 border-purple-600 font-medium'
+                        : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold flex items-center space-x-1.5 text-purple-300">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span>🌐 Worldwide Cloud Tunnel (Zero-Config)</span>
+                      </div>
+                      <span className="text-[9px] bg-purple-900/60 px-1.5 py-0.5 rounded text-purple-300 border border-purple-700">Anywhere in World</span>
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono mt-1 break-all">
+                      {globalTunnelUrl || 'Auto-fetches from cloud relay'}
+                    </div>
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setServerUrl('http://localhost:8000');
+                        axios.defaults.baseURL = 'http://localhost:8000';
+                        setConnectionMode('usb');
+                        localStorage.setItem('student_os_server_url', 'http://localhost:8000');
+                      }}
+                      className={`p-2.5 text-xs text-left rounded-lg border transition ${
+                        serverUrl.includes('localhost') && connectionMode !== 'global'
+                          ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700 font-medium'
+                          : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900'
+                      }`}
+                    >
+                      <div className="font-semibold flex items-center space-x-1 text-emerald-400">
+                        <Laptop className="h-3 w-3" />
+                        <span>🔌 USB Direct</span>
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-mono mt-0.5">localhost:8000</div>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setServerUrl('http://10.0.18.180:8000');
+                        axios.defaults.baseURL = 'http://10.0.18.180:8000';
+                        setConnectionMode('wifi');
+                        localStorage.setItem('student_os_server_url', 'http://10.0.18.180:8000');
+                      }}
+                      className={`p-2.5 text-xs text-left rounded-lg border transition ${
+                        serverUrl.includes('10.0.18.180') && connectionMode !== 'global'
+                          ? 'bg-blue-950/40 text-blue-300 border-blue-700 font-medium'
+                          : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900'
+                      }`}
+                    >
+                      <div className="font-semibold flex items-center space-x-1 text-blue-400">
+                        <Wifi className="h-3 w-3" />
+                        <span>📶 Home Wi-Fi</span>
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-mono mt-0.5">10.0.18.180:8000</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-zinc-300">
+                    Auto-Discover Worldwide Endpoint:
+                  </label>
+                  <button
+                    onClick={async () => {
+                      const url = await fetchFromCloudRelay();
+                      if (url) {
+                        setServerUrl(url);
+                        axios.defaults.baseURL = url;
+                        setConnectionMode('global');
+                        localStorage.setItem('student_os_server_url', url);
+                        fetchAntigravityChats();
+                      }
+                    }}
+                    disabled={fetchingCloudRelay}
+                    className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center space-x-1"
+                  >
+                    <RefreshCw className={`h-2.5 w-2.5 ${fetchingCloudRelay ? 'animate-spin' : ''}`} />
+                    <span>{fetchingCloudRelay ? 'Querying Cloud...' : 'Query Cloud Relay'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  Or Enter Custom Workstation URL / IP:
+                </label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={customIpInput}
+                    onChange={(e) => setCustomIpInput(e.target.value)}
+                    placeholder="https://...trycloudflare.com or 192.168.1.5"
+                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none focus:border-purple-500"
+                  />
+                  <button
+                    onClick={() => {
+                      let clean = customIpInput.trim();
+                      if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+                        clean = `http://${clean}:8000`;
+                      }
+                      setServerUrl(clean);
+                      axios.defaults.baseURL = clean;
+                      setConnectionMode(clean.includes('trycloudflare') ? 'global' : 'wifi');
+                      localStorage.setItem('student_os_server_url', clean);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-purple-600 hover:bg-purple-500 transition"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-zinc-800 flex justify-end">
+                <button
+                  onClick={() => setShowServerModal(false)}
+                  className="px-4 py-1.5 rounded-lg text-xs font-medium text-white bg-zinc-800 hover:bg-zinc-700 transition"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 flex justify-around py-2 px-1">
+        {[
+          { id: 'antigravity', label: 'Antigravity', icon: Sparkles, isAntigravity: true, badge: antigravityChats.length },
+          { id: 'copilot', label: 'Copilot', icon: Bot },
+          { id: 'remote', label: 'Remote', icon: Monitor },
+          { id: 'academic', label: 'Classroom', icon: GraduationCap },
+          { id: 'labs', label: 'Labs', icon: FlaskConical, badge: labworks.length },
+          { id: 'career', label: 'Career', icon: Briefcase },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id as any);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg transition relative ${
+                isActive ? 'text-amber-400 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Icon className={`h-4 w-4 mb-0.5 ${tab.isAntigravity ? 'text-amber-400 animate-pulse' : ''}`} />
+              <span className="text-[10px] tracking-tight">{tab.label}</span>
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span className="absolute top-0 right-1 text-[8px] font-mono px-1 rounded-full bg-amber-600 text-white font-bold">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
     </div>
   );
 }

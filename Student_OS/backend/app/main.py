@@ -2,11 +2,13 @@ import sys
 import asyncio
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -56,9 +58,15 @@ async def lifespan(app: FastAPI):
     init_db()
     log_agent_event("INFO", "Student OS backend started successfully.")
     scheduler_task = asyncio.create_task(background_scheduler_loop(1800))
+    
+    # Launch Global Internet Cloudflare Tunnel in background
+    from app.services.global_tunnel_manager import global_tunnel_manager
+    asyncio.get_event_loop().run_in_executor(None, global_tunnel_manager.start_tunnel, 8000)
+    
     yield
     # Shutdown
     scheduler_task.cancel()
+    global_tunnel_manager.stop_tunnel()
     logger.info("Student OS backend shutdown.")
 
 app = FastAPI(
@@ -634,14 +642,303 @@ async def attendance_analysis_endpoint(target_pct: float = 80.0):
         })
     return analyzed
 
+# ----------------- Mobile App Cross-Device Sync & Gemini Endpoints -----------------
+from app.services.chatbot_engine import tool_system_telemetry, tool_academic_status, tool_applied_applications
+from app.services.lab_matching_service import analyze_and_match_labworks
+from app.services.ai_engine import generate_gemini_response
+
+@app.get("/api/mobile/status")
+async def mobile_status_endpoint():
+    """
+    Lightweight healthcheck endpoint for mobile device to test laptop reachability.
+    """
+    return {
+        "status": "online",
+        "laptop_name": "Shaunak-Workstation",
+        "timestamp": datetime.now().isoformat() if "datetime" in globals() else "",
+        "ip": "10.0.18.180"
+    }
+
+@app.get("/api/mobile/sync")
+async def mobile_sync_bundle():
+    """
+    Consolidated high-speed synchronization endpoint for the mobile app.
+    Returns academic records, attendance, labworks, verified career applications, and telemetry.
+    """
+    academic = tool_academic_status()
+    telemetry = tool_system_telemetry()
+    applied = tool_applied_applications()
+    labworks_data = analyze_and_match_labworks()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM subjects ORDER BY name ASC")
+    subjects = [dict(r) for r in cursor.fetchall()]
+    cursor.execute("SELECT * FROM assignments ORDER BY deadline ASC")
+    assignments = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    return {
+        "laptop_online": True,
+        "sync_timestamp": subjects[0].get("last_synced", "") if subjects else "",
+        "telemetry": telemetry,
+        "academic": {
+            "overall_attendance": academic.get("overall_attendance", 0),
+            "subjects_count": academic.get("subjects_count", 0),
+            "at_risk_subjects": academic.get("at_risk_subjects", []),
+            "pending_count": academic.get("pending_assignments_count", 0),
+            "subjects": subjects,
+            "assignments": assignments
+        },
+        "labworks": {
+            "total_practicals": labworks_data.get("total_practicals", 22),
+            "subjects": labworks_data.get("subjects", [])
+        },
+        "career": {
+            "applied_count": applied.get("count", 0),
+            "applications": applied.get("applications", [])
+        }
+    }
+
+@app.post("/api/mobile/chat")
+async def mobile_chat_endpoint(payload: Dict[str, Any]):
+    """
+    Mobile copilot chat endpoint. Uses Gemini API by default if available,
+    with seamless fallback to local Ollama / workstation chatbot engine.
+    """
+    query = payload.get("query", "")
+    history = payload.get("history", [])
+    use_gemini = payload.get("use_gemini", True)
+
+    if use_gemini:
+        gemini_reply = generate_gemini_response(
+            prompt=query,
+            system_prompt=(
+                "You are Shaunak Rane's Student OS Mobile AI Assistant at Universal AI University. "
+                "Provide direct, concise, high-intelligence academic tutoring, lab practical explanations, "
+                "and study advice. Format responses in clean GitHub markdown."
+            ),
+            history=history
+        )
+        if gemini_reply:
+            return {
+                "response": gemini_reply,
+                "tool_used": "gemini_mobile_api",
+                "engine": "Google Gemini 1.5 Flash"
+            }
+
+    # Fallback to local workstation chatbot engine
+    return process_chat_query(query, history=history)
+
+
+# ----------------- Google Remote Desktop & Workstation Control Endpoints -----------------
+import subprocess
+import socket
+import psutil
+
+@app.get("/api/remote/status")
+async def get_remote_desktop_status():
+    """
+    Returns the real-time status of Chrome Remote Desktop Service (chromoting),
+    host workstation telemetry, and quick access URLs for both Web and Mobile.
+    """
+    try:
+        res = subprocess.run(
+            ['powershell', '-NoProfile', '-Command', 'Get-Service chromoting -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Status'],
+            capture_output=True, text=True, timeout=4
+        )
+        chromoting_status = res.stdout.strip() or "Stopped"
+    except Exception:
+        chromoting_status = "Unknown"
+
+    hostname = socket.gethostname()
+    cpu = psutil.cpu_percent(interval=0.1)
+    ram = psutil.virtual_memory().percent
+    disk = psutil.disk_usage('C:\\').percent
+
+    return {
+        "service_name": "Google Chrome Remote Desktop",
+        "service_id": "chromoting",
+        "status": chromoting_status,
+        "is_running": chromoting_status.lower() == "running",
+        "hostname": hostname,
+        "ip_lan": "10.0.18.180",
+        "web_access_url": "https://remotedesktop.google.com/access",
+        "web_support_url": "https://remotedesktop.google.com/support",
+        "android_package": "com.google.chromeremotedesktop",
+        "android_play_store": "https://play.google.com/store/apps/details?id=com.google.chromeremotedesktop",
+        "telemetry": {
+            "cpu_percent": cpu,
+            "ram_percent": ram,
+            "disk_percent": disk
+        },
+        "supported_launchers": [
+            {"id": "crd_portal", "name": "Chrome Remote Desktop Web", "icon": "Globe"},
+            {"id": "antigravity", "name": "Antigravity IDE", "icon": "Sparkles"},
+            {"id": "vscode", "name": "VS Code (Automation Workspace)", "icon": "Code2"},
+            {"id": "chrome", "name": "Google Chrome Browser", "icon": "Compass"},
+            {"id": "explorer", "name": "Automation Workspace Explorer", "icon": "Folder"},
+            {"id": "terminal", "name": "PowerShell Terminal", "icon": "Terminal"},
+            {"id": "digicampus_sync", "name": "Digicampus Scraper Sync", "icon": "RefreshCw"}
+        ]
+    }
+
+@app.post("/api/remote/launch")
+async def launch_remote_workstation_app(payload: Dict[str, str]):
+    """
+    Launch applications or trigger actions on the host laptop workstation remotely from phone.
+    """
+    target = payload.get("target", "crd_portal")
+    workspace_root = r"C:\Users\Shaunak Rane\Desktop\Projects\Automation"
+
+    if target == "crd_portal":
+        cmd = 'Start-Process "https://remotedesktop.google.com/access"'
+        msg = "Opened Google Chrome Remote Desktop portal in browser."
+    elif target == "antigravity":
+        cmd = f'Start-Process "C:\\Users\\Shaunak Rane\\AppData\\Local\\Programs\\Antigravity\\Antigravity.exe" -ArgumentList "{workspace_root}"'
+        msg = "Launched Antigravity IDE with Automation workspace."
+    elif target == "vscode":
+        cmd = f'Start-Process "code" -ArgumentList "{workspace_root}"'
+        msg = "Launched VS Code with Automation workspace."
+    elif target == "chrome":
+        cmd = 'Start-Process "chrome.exe"'
+        msg = "Launched Google Chrome."
+    elif target == "explorer":
+        cmd = f'explorer.exe "{workspace_root}"'
+        msg = "Opened Windows Explorer in Automation directory."
+    elif target == "terminal":
+        cmd = f'Start-Process "powershell.exe" -WorkingDirectory "{workspace_root}"'
+        msg = "Spawned PowerShell Terminal on workstation."
+    elif target == "digicampus_sync":
+        asyncio.create_task(sync_digicampus())
+        return {"success": True, "message": "Initiated background DigiCampus scraper audit on laptop."}
+    else:
+        return {"success": False, "message": f"Unknown target: {target}"}
+
+    try:
+        subprocess.Popen(["powershell", "-NoProfile", "-Command", cmd], shell=True)
+        return {"success": True, "message": msg}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/remote/command")
+async def execute_remote_workstation_command(payload: Dict[str, str]):
+    """
+    Execute a PowerShell command on the laptop remotely and return output.
+    """
+    command = payload.get("command", "")
+    if not command:
+        raise HTTPException(status_code=400, detail="Empty command")
+    
+    workspace_root = r"C:\Users\Shaunak Rane\Desktop\Projects\Automation"
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            cwd=workspace_root,
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "stdout": "", "stderr": "Command timed out after 15s", "exit_code": -1}
+    except Exception as e:
+        return {"success": False, "stdout": "", "stderr": str(e), "exit_code": -1}
+
+
+# ----------------- Antigravity IDE Chat Hub Endpoints -----------------
+from app.services.antigravity_chat_service import (
+    list_antigravity_chats,
+    get_chat_messages,
+    execute_chat_prompt_on_workstation
+)
+
+@app.get("/api/antigravity/chats")
+async def get_all_antigravity_chats():
+    """
+    Returns list of all offline & active Antigravity conversations stored on the laptop.
+    """
+    return list_antigravity_chats()
+
+@app.get("/api/antigravity/chats/{conversation_id}/messages")
+async def get_conversation_messages_endpoint(conversation_id: str, limit: int = 40):
+    """
+    Returns structured message history of an Antigravity conversation.
+    """
+    return get_chat_messages(conversation_id, max_messages=limit)
+
+@app.post("/api/antigravity/chats/{conversation_id}/prompt")
+async def send_antigravity_chat_prompt_endpoint(conversation_id: str, payload: Dict[str, str]):
+    """
+    Sends a coding prompt from mobile into the Antigravity conversation.
+    Executes the code on the laptop workspace, updates the active directive, and returns the response.
+    """
+    prompt = payload.get("prompt", "")
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Empty prompt")
+    return execute_chat_prompt_on_workstation(conversation_id, prompt)
+
+
+# ----------------- Global Internet Tunnel Endpoints -----------------
+from app.services.global_tunnel_manager import global_tunnel_manager
+
+@app.get("/api/global/tunnel-status")
+async def get_global_tunnel_status_endpoint():
+    """
+    Returns live diagnostic status and active HTTPS URL of the worldwide internet tunnel.
+    """
+    return global_tunnel_manager.get_status()
+
+@app.post("/api/global/tunnel-toggle")
+async def toggle_global_tunnel_endpoint(payload: Optional[Dict[str, Any]] = None):
+    """
+    Enables or restarts the global internet tunnel.
+    """
+    enable = payload.get("enable", True) if payload else True
+    if enable:
+        return global_tunnel_manager.start_tunnel(8000)
+    else:
+        return global_tunnel_manager.stop_tunnel()
+
+@app.post("/api/global/custom-url")
+async def set_custom_global_url_endpoint(payload: Dict[str, str]):
+    """
+    Saves a custom domain or Tailscale / Ngrok global URL.
+    """
+    url = payload.get("url", "")
+    return global_tunnel_manager.set_custom_url(url)
+
 
 # ----------------- Screenshots Static Mount -----------------
 screenshots_dir = Path(__file__).resolve().parent.parent.parent.parent / "Auto Apply" / "logs" / "screenshots"
 screenshots_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/api/screenshots", StaticFiles(directory=str(screenshots_dir)), name="screenshots")
 
-# ----------------- Frontend Static Files Mount -----------------
+# ----------------- Frontend Static Files Mount & SPA Fallback -----------------
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-if frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+if (frontend_dist / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
+
+@app.get("/")
+async def serve_spa_root():
+    if (frontend_dist / "index.html").exists():
+        return FileResponse(str(frontend_dist / "index.html"))
+    return {"status": "online", "message": "Student OS & Antigravity IDE Backend Running"}
+
+@app.get("/{full_path:path}")
+async def serve_spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path.startswith("ws"):
+        raise HTTPException(status_code=404, detail=f"API route not found: {full_path}")
+    local_file = frontend_dist / full_path
+    if local_file.exists() and local_file.is_file():
+        return FileResponse(str(local_file))
+    if (frontend_dist / "index.html").exists():
+        return FileResponse(str(frontend_dist / "index.html"))
+    raise HTTPException(status_code=404, detail="Not Found")
+
 

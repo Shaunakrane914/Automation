@@ -66,3 +66,15 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Android build outputs & binaries
+*.apk
+*.exe
+.gradle/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/captures/
+**/android/.idea/
+**/bin/*.exe
+

@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.config import settings
 from app.database import log_agent_event
 
@@ -154,3 +154,48 @@ if __name__ == "__main__":
 
     log_agent_event("INFO", f"Scaffolded lab environment at {lab_dir}")
     return lab_dir
+
+def generate_gemini_response(prompt: str, system_prompt: str = "", history: Optional[List[Dict[str, str]]] = None) -> Optional[str]:
+    """
+    Directly invokes Google Gemini API / local Ollama for mobile chat and code prompts.
+    """
+    # Try Gemini REST API directly with requests
+    if settings.GEMINI_API_KEY:
+        try:
+            import requests
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            contents = []
+            if system_prompt:
+                contents.append({"role": "user", "parts": [{"text": f"System Directive: {system_prompt}"}]})
+                contents.append({"role": "model", "parts": [{"text": "Understood. I will execute instructions accordingly."}]})
+            if history:
+                for msg in history[-6:]:
+                    role = "user" if msg.get("sender") == "user" else "model"
+                    text = msg.get("text", "")
+                    if text:
+                        contents.append({"role": role, "parts": [{"text": text}]})
+            contents.append({"role": "user", "parts": [{"text": prompt}]})
+
+            resp = requests.post(url, json={"contents": contents}, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts:
+                        return parts[0].get("text", "").strip()
+        except Exception as e:
+            logger.warning(f"Direct Gemini REST call failed: {e}")
+
+    # Fallback to local Ollama on laptop GPU
+    try:
+        from app.services.chatbot_engine import call_ollama
+        ollama_reply = call_ollama(prompt, system_prompt or "You are Antigravity Copilot on Shaunak's laptop.")
+        if ollama_reply:
+            return ollama_reply
+    except Exception as e:
+        logger.warning(f"Local Ollama fallback failed: {e}")
+
+    return None
+
+

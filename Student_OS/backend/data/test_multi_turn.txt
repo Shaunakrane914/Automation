@@ -1,0 +1,25 @@
+=== TURN 1 ===
+USER: Can you open digicampus and check if my ajp lab assignment is submitted or not
+TOOL: assignment_status_verifier
+ASSISTANT:
+✅ **Yes, Shaunak! Your Advance Java Lab Assignment is Submitted & Completed.**
+
+- 📚 **Course:** `Advance Java Programming Lab [CSG5.52004]`
+- 📝 **Assignment:** `Java Programming Lab Assignment (Collections & JDBC)`
+- 🟢 **Status:** **`SUBMITTED ✅`** (All active DigiCampus submissions caught up)
+- 🔬 **Local Practicals:** All 5 lab experiments (`ArrayList1.class`, `LambdaFunctions.pdf`, `DBConnect.class`, `StudentMDI.class`, `Exp 5 Servlets`) are indexed in your workspace.
+
+You have **0 pending ongoing submissions** for Advance Java!
+
+=== TURN 2 ===
+USER: now?
+TOOL: conversational_memory
+ASSISTANT:
+You're all set! Your **Java Programming Lab Assignment** is verified as **Submitted** on DigiCampus.
+
+Here are 3 high-impact things we can do next:
+1. 🔬 **Practice Lab 5:** Review the **Servlet Request-Response Lifecycle** in your AJP curriculum.
+2. 💻 **Test JDBC Code:** Review and test your MySQL database connectivity module (`Exp 3`).
+3. 📊 **Check Attendance:** Review your overall 88.7% attendance across all 15 enrolled courses.
+
+What would you like to dive into?

@@ -1,0 +1,94 @@
+TOOL USED: digicampus_labwork_deep_analyzer
+
+🔬 **DigiCampus Labwork Deep Analysis & Practice Roadmap**
+**Course:** `Advance Java Programming Lab [CSG5.52004]` • **Total Experiments:** 5
+
+I have inspected each experiment on DigiCampus, matched **Sir's Problem Statement & Attached Reference Files** with **your submitted code** (from DigiCampus Drive & `Desktop/3rd Year`), and formulated your complete hands-on practice roadmap:
+
+---
+### Exp 1: Dynamic Data Structures: Java Collection Framework (ArrayList & LinkedList)
+📋 **Sir's Problem Statement & Faculty Attachment:**
+> Implement dynamic data structures using Java's ArrayList and LinkedList. Evaluate insertion, deletion, index-based element replacement (.set), and compare random-access vs sequential traversal time complexities.
+- 📎 **Faculty Reference File:** `ArrayList.pdf & LinkedList_JavaDS.pdf`
+
+💻 **Your Submission & Code Analysis:**
+- 📁 **Submitted File:** `ArrayList1.java (Compiled: ArrayList1.class)` ✅ [Verified in Workspace]
+- ⚙️ **Key APIs & Methods Used:** `add(), get(), set(), size(), Iterator`
+- 🧠 **Implementation Strengths:** Clean generic initialization ArrayList<String>, accurate indexed for-loop traversal, and standard string representation.
+
+🎯 **Shaunak's Tailored Practice To-Dos:**
+  - [ ] **[Time Complexity]** Implement LinkedList<String> and benchmark insertion at index 0 vs ArrayList.
+  - [ ] **[Sorting & Generics]** Write custom Comparator<Student> to sort collections using Collections.sort().
+  - [ ] **[Concurrency]** Implement thread-safe collection using Collections.synchronizedList() or CopyOnWriteArrayList.
+
+---
+### Exp 2: Functional Programming & Java 8 Lambda Expressions
+📋 **Sir's Problem Statement & Faculty Attachment:**
+> Write concise, expressive Java code using Java 8 Lambda expressions and Functional Interfaces. Implement custom calculators and filter collections using Streams.
+- 📎 **Faculty Reference File:** `LambdaFunctions.pdf`
+
+💻 **Your Submission & Code Analysis:**
+- 📁 **Submitted File:** `LambdaDemo.java / LambdaFunctions.pdf` ✅ [Verified in Workspace]
+- ⚙️ **Key APIs & Methods Used:** `(a, b) -> a + b, (a, b) -> a * b, stream().filter(), forEach(System.out::println)`
+- 🧠 **Implementation Strengths:** Proper @FunctionalInterface annotation with single abstract method and method references.
+
+🎯 **Shaunak's Tailored Practice To-Dos:**
+  - [ ] **[Predicate]** Implement java.util.function.Predicate<Integer> to filter prime numbers.
+  - [ ] **[Stream API]** Use Stream.reduce() to compute running products and cumulative statistics.
+  - [ ] **[Syntax Mastery]** Practice Method References (String::toUpperCase, System.out::println) with custom lambdas.
+
+---
+### Exp 3: JDBC Database Connectivity & MySQL Integration
+📋 **Sir's Problem Statement & Faculty Attachment:**
+> Build an end-to-end database connectivity module integrating JDBC and MySQL. Connect via DriverManager, execute parameterized queries using PreparedStatement, and display student records.
+- 📎 **Faculty Reference File:** `DatabaseConnectivity.pdf`
+
+💻 **Your Submission & Code Analysis:**
+- 📁 **Submitted File:** `DBConnect.java (Compiled: DBConnect.class)` ✅ [Verified in Workspace]
+- ⚙️ **Key APIs & Methods Used:** `DriverManager.getConnection(), prepareStatement(), executeQuery(), ResultSet.next()`
+- 🧠 **Implementation Strengths:** Try-with-resources architecture ensuring proper closing of Connections and Statements.
+
+🎯 **Shaunak's Tailored Practice To-Dos:**
+  - [ ] **[Performance]** Configure connection pooling using HikariCP for production-grade throughput.
+  - [ ] **[Transactions]** Implement ACID transaction management with conn.setAutoCommit(false) and rollback().
+  - [ ] **[Batching]** Write batch execution with PreparedStatement.addBatch() and executeBatch().
+
+---
+### Exp 4: Desktop GUI Forms & Multi-Document Interface (Swing & NetBeans Form)
+📋 **Sir's Problem Statement & Faculty Attachment:**
+> Develop an interactive Swing desktop GUI application featuring a master MDI container (StudentMDI), modal student registration dialogs, search forms, and event-driven data binding.
+- 📎 **Faculty Reference File:** `AJP_MidTerm_Question_Bank.pdf (Swing Form Section)`
+
+💻 **Your Submission & Code Analysis:**
+- 📁 **Submitted File:** `StudentMDI.java (Compiled: StudentMDI.class, Registration.class, SearchStudent.class)` ✅ [Verified in Workspace]
+- ⚙️ **Key APIs & Methods Used:** `JDesktopPane, JInternalFrame, ActionListener, GridLayout`
+- 🧠 **Implementation Strengths:** Modular child window management and responsive NetBeans .form bindings.
+
+🎯 **Shaunak's Tailored Practice To-Dos:**
+  - [ ] **[Validation]** Add input validation with regex for email and phone numbers before triggering DBConnect.
+  - [ ] **[Data Binding]** Render query results in dynamic JTable with DefaultTableModel.
+  - [ ] **[UI Ergonomics]** Implement keyboard accelerators (Ctrl+N for New, Ctrl+F for Search) on JMenuBar.
+
+---
+### Exp 5: Java Servlets: Web Application Request-Response Lifecycle & HTTP Handling
+📋 **Sir's Problem Statement & Faculty Attachment:**
+> Build server-side Java web components using Servlets. Handle client HTTP GET and POST requests, process query parameters, maintain user state via HttpSession, and dispatch responses.
+- 📎 **Faculty Reference File:** `AJP_MidTerm_Question_Bank.pdf (Web Architecture & Servlets)`
+
+💻 **Your Submission & Code Analysis:**
+- 📁 **Submitted File:** `StudentServlet.java / Web Application Archive` ✅ [Verified in Workspace]
+- ⚙️ **Key APIs & Methods Used:** `init(), doGet(), doPost(), getParameter(), getSession(), RequestDispatcher.forward()`
+- 🧠 **Implementation Strengths:** Clean request parsing, session token isolation, and MVC forwarding.
+
+🎯 **Shaunak's Tailored Practice To-Dos:**
+  - [ ] **[Filters & Security]** Implement Servlet Filter for authentication: check if session attribute 'user' exists before routing.
+  - [ ] **[Form Handling]** Build doPost handler to parse multi-part form data / file uploads.
+  - [ ] **[Cookies & State]** Practice Cookie creation and expiration tracking: response.addCookie(new Cookie('auth', token)).
+
+---
+### 🚀 Recommended Practice Sequence for Mastery:
+1. **Exp 1 (Collections):** Run benchmark tests comparing `ArrayList` vs `LinkedList` on 10,000 insertions.
+2. **Exp 2 (Lambdas & Streams):** Write custom predicates to filter and aggregate records with Java 8 Streams.
+3. **Exp 3 (JDBC):** Practice SQL parameterization and transaction commits with rollback handling.
+4. **Exp 4 (Swing GUI):** Test MDI frame events and form input validation connected to MySQL.
+5. **Exp 5 (Java Servlets):** Practice the complete `HttpServlet` lifecycle (`doGet`/`doPost`), session tracking with `HttpSession`, and `RequestDispatcher.forward()`.

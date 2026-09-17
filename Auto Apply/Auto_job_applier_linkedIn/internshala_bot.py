@@ -40,10 +40,10 @@ SEARCH_KEYWORDS = [
 ]
 
 # Work from Home search (True = WFH only, False = all locations including on-site)
-WFH_ONLY = False
+WFH_ONLY = True
 
-# Location filter — leave empty string "" for all India
-LOCATION = "Mumbai"   # e.g. "Mumbai", "Bangalore", "Delhi", "" for all
+# Location filter — leave empty string "" for all India (100% remote)
+LOCATION = ""
 
 # ── WHITELIST: title must contain at least one of these ──────────────
 # If NONE of these appear in the title, the job is skipped immediately.
@@ -167,17 +167,29 @@ class InternshalaBot:
     # ── Driver setup ──────────────────────────
     def setup_driver(self):
         log("🚀 Starting Chrome...")
+        import socket
+        port_open = False
         try:
-            opts = Options()
-            opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
-            self.driver = webdriver.Chrome(options=opts)
-            self.wait = WebDriverWait(self.driver, 15)
-            log("✅ Connected to active Chrome session on 127.0.0.1:9222!")
-            return
-        except Exception as cdp_err:
-            log(f"  CDP session note: {cdp_err}. Initializing local Chrome driver...")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.3)
+                port_open = (s.connect_ex(('127.0.0.1', 9222)) == 0)
+        except Exception:
+            pass
+
+        if port_open:
+            try:
+                opts = Options()
+                opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+                self.driver = webdriver.Chrome(options=opts)
+                self.wait = WebDriverWait(self.driver, 15)
+                log("✅ Connected to active Chrome session on 127.0.0.1:9222!")
+                return
+            except Exception as cdp_err:
+                log(f"  CDP session note: {cdp_err}. Initializing local Chrome driver...")
 
         options = Options()
+        profile_dir = os.path.join(os.path.dirname(__file__), "chrome_profile_internshala")
+        options.add_argument(f"--user-data-dir={profile_dir}")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-blink-features=AutomationControlled")
@@ -185,13 +197,16 @@ class InternshalaBot:
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("--start-maximized")
         try:
-            from webdriver_manager.chrome import ChromeDriverManager
-            from selenium.webdriver.chrome.service import Service
-            self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-        except Exception:
             self.driver = webdriver.Chrome(options=options)
+        except Exception as sel_err:
+            try:
+                from webdriver_manager.chrome import ChromeDriverManager
+                from selenium.webdriver.chrome.service import Service
+                self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            except Exception:
+                self.driver = webdriver.Chrome(options=options)
         self.wait   = WebDriverWait(self.driver, 15)
-        log("✅ Chrome ready!")
+        log("✅ Chrome ready! (with persistent Internshala profile)")
 
     # ── Login ─────────────────────────────────
     def login(self):
@@ -424,6 +439,17 @@ class InternshalaBot:
                     log(f"  🔢 Answered {len(num_qs)} numeric question(s)")
             except Exception:
                 pass
+
+            # 4b. Resume / portfolio file upload if present
+            try:
+                file_inputs = modal.find_elements(By.CSS_SELECTOR, "input[type='file']")
+                for fi in file_inputs:
+                    resume_p = r"C:\Users\Shaunak Rane\Desktop\Projects\Portfolio\Shaunak_Rane_Resume.pdf"
+                    if os.path.exists(resume_p):
+                        fi.send_keys(resume_p)
+                        log(f"  📎 Attached latest resume: {os.path.basename(resume_p)}")
+            except Exception as fe:
+                log(f"  ⚠️ Resume upload note: {fe}")
 
             # 5. Submit — confirmed selector: #submit
             submitted = False
